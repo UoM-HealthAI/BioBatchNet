@@ -1,0 +1,39 @@
+# Ignore generated folders
+BioBatchNet/saved/
+BioBatchNet/Results/
+BioBatchNet/logger/
+scExperiment_IMC/
+CPC/
+
+# Ignore Python virtual environments
+venv/
+env/
+
+# Ignore Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ignore Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Ignore OS generated files
+.DS_Store
+Thumbs.db
+
+# Ignore IDE/editor configuration files
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# Ignore log files
+*.log
+
+# Ignore environment configuration files
+*.env
+
+# Ignore txt
+*.txt
+
