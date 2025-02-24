@@ -53,10 +53,11 @@ trainer:
   monitor: "min val_loss"
   early_stop: 20
   use_vamp: False
+  if_imc: True
   loss_weights:
     recon_loss: 5
-    batch_loss_z1: 0.03
-    batch_loss_z2: 0.1
+    discriminator: 0.03
+    classifier: 0.1
     kl_loss_1: 0.00002
     kl_loss_2: 0.01
     ortho_loss: 0.001

@@ -23,6 +23,7 @@ def main(config):
     random.seed(SEED)
 
     # prepare data
+    dataset_name = config['data_loader']['type'] 
     data_dir = "../Data/Gene_data/csv_format/macaque_raw.csv"
     train_dataset = GeneDataset(data_dir)
     train_dataloader = DataLoader(train_dataset, shuffle=True, batch_size=256)

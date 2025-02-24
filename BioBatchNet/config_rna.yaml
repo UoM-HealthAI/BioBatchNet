@@ -5,7 +5,6 @@ seed: null
 arch:
   type: GeneVAE
   args:
-    use_vamp: False
     in_sz: 2000
     bio_encoder_hidden_layers: [500, 2000, 2000]
     batch_encoder_hidden_layers: [500]
@@ -60,6 +59,7 @@ trainer:
   verbosity: 2
   monitor: "min val_loss"
   early_stop: 10
+  if_imc: False
   loss_weights:
     recon_loss: 5
     batch_loss_z1: 0.03

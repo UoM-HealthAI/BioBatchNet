@@ -4,25 +4,29 @@ import torch
 import wandb
 from pathlib import Path
 import torch.nn.functional as F
+from tqdm import tqdm
 
 from .loss import kl_divergence, orthogonal_loss, ZINBLoss, MMDLoss
-from .util import MetricTracker, log_gradients_to_wandb
+from .util import MetricTracker
 
 class Trainer:
     def __init__(self, config, model, optimizer, dataloader, scheduler, device):
         self.config = config
-
         self.model = model
         self.optimizer = optimizer
         self.dataloader = dataloader
         self.device = device
         self.scheduler = scheduler
 
-        self.cfg_trainer = config['trainer']
+        self.cfg_trainer = self.config['trainer']
         self.epochs = self.cfg_trainer['epochs']
-        self.save_period = self.cfg_trainer['save_period'] 
-        self.logger = self.config.get_logger('trainer', self.config['trainer']['verbosity'])
+        self.save_period = self.cfg_trainer['save_period']
+        self.if_imc = self.cfg_trainer['if_imc']
+        self.loss_weights = self.cfg_trainer['loss_weights'] 
 
+        self.checkpoint_dir = self.config.save_dir
+        self.logger = self.config.get_logger('trainer', self.config['trainer']['verbosity'])
+ 
         self.mse_recon = nn.MSELoss()
         self.zinb_recon = ZINBLoss().cuda()
         self.criterion_classification = nn.CrossEntropyLoss()
@@ -31,16 +35,17 @@ class Trainer:
         wandb.init(project=config['name'], config=config)
 
         self.metric_tracker = MetricTracker(
-            'total_loss', 'recon_loss', 'kl_loss_1', 'kl_loss_2', 'ortho_loss',
-            'batch_loss_z1', 'batch_loss_z2'
+            'total_loss', 'recon_loss', 'kl_loss_1', 'kl_loss_2', 
+            'ortho_loss', 'batch_loss_z1', 'batch_loss_z2'
         )
 
-        self.checkpoint_dir = self.config.save_dir
-
-        # Load loss weights from config
-        self.loss_weights = self.cfg_trainer['loss_weights']
-
-    def _imc_epoch(self, epoch):
+    def train(self):
+        for epoch in tqdm(range(1, self.epochs + 1)):
+            self._train_epoch(epoch, mode='imc' if self.if_imc else 'rna')            
+            if epoch % self.save_period == 0:
+                self._save_checkpoint(epoch)
+                
+    def _train_epoch(self, epoch, mode):
         self.metric_tracker.reset()
         self.model.train()
 
@@ -50,23 +55,31 @@ class Trainer:
 
         for data, batch_id, _ in self.dataloader:
             data, batch_id = data.to(self.device), batch_id.to(self.device)
-
             self.optimizer.zero_grad()
 
-            # Forward pass
-            bio_z, bio_mu, bio_logvar, batch_z, batch_mu, batch_logvar, bio_batch_pred, batch_batch_pred, reconstruction = self.model(data)
-
-            # reconstruction loss
-            recon_loss = self.imc_criterion_recon(data, reconstruction)
-
-            # kl loss 
+            # forward pass and reconstrution loss
+            if mode == 'imc':
+                bio_z, bio_mu, bio_logvar, batch_z, batch_mu, batch_logvar, bio_batch_pred, batch_batch_pred, reconstruction = self.model(data)
+                recon_loss = self.mse_recon(data, reconstruction)
+            else:
+                bio_z, bio_mu, bio_logvar, batch_z, batch_mu, batch_logvar, bio_batch_pred, batch_batch_pred, _mean, _disp, _pi, size_factor, size_mu, size_logvar = self.model(data)
+                recon_loss = self.zinb_recon(data, _mean, _disp, _pi)
+            
+            # bio kl loss 
             kl_loss_1 = kl_divergence(bio_mu, bio_logvar).mean()
             bio_z_prior = torch.randn_like(bio_z, device=self.device)
             mmd_loss = self.mmd_loss(bio_z, bio_z_prior)
+
+            # batch kl loss
             kl_loss_2 = kl_divergence(batch_mu, batch_logvar).mean()
 
-            # classifier loss
+            # library size kl loss
+            kl_loss_size = kl_divergence(size_mu, size_logvar).mean() if mode == 'rna' else 0
+
+            # discriminator loss            
             batch_loss_z1 = self.criterion_classification(bio_batch_pred, batch_id)
+
+            # classifier loss
             batch_loss_z2 = self.criterion_classification(batch_batch_pred, batch_id)
             
             # Orthogonal loss
@@ -74,106 +87,12 @@ class Trainer:
 
             # Total loss
             loss = (self.loss_weights['recon_loss'] * recon_loss +
-                    self.loss_weights['batch_loss_z1'] * batch_loss_z1 +
-                    self.loss_weights['batch_loss_z2'] * batch_loss_z2 +
-                    self.loss_weights['mmd_loss'] * mmd_loss +
-                    self.loss_weights['kl_loss_2'] * kl_loss_2 +
-                    self.loss_weights['ortho_loss'] * ortho_loss_value)
-   
-            loss.backward()
-
-            self.optimizer.step()
-
-            # Update losses
-            losses = {
-                'total_loss': loss.item(),
-                'recon_loss': recon_loss.item(),
-                'batch_loss_z1': batch_loss_z1.item(),
-                'batch_loss_z2': batch_loss_z2.item(),
-                'kl_loss_1': kl_loss_1.item(),
-                'kl_loss_2': kl_loss_2.item(),
-                'ortho_loss': ortho_loss_value.item(),
-            }
-            self.metric_tracker.update_batch(losses, count=data.size(0))
-
-            # Accuracy calculation
-            z1_pred = torch.argmax(bio_batch_pred, dim=1)
-            z2_pred = torch.argmax(batch_batch_pred, dim=1)
-
-            total_correct_z1 += (z1_pred == batch_id).sum().item()
-            total_correct_z2 += (z2_pred == batch_id).sum().item()
-
-            total_samples += batch_id.size(0)
-        self.scheduler.step()
-
-        # Avg accuracy for epoch
-        z1_accuracy = total_correct_z1 / total_samples * 100
-        z2_accuracy = total_correct_z2 / total_samples * 100
-
-        # log to wandb
-        self.metric_tracker.log_to_wandb({
-            'Z1 Accuracy': z1_accuracy,
-            'Z2 Accuracy': z2_accuracy
-        })
-
-        self.logger.info(f"Epoch {epoch}: Loss = {self.metric_tracker.avg('total_loss'):.2f}, kl_loss = {self.metric_tracker.avg('kl_loss_1'):.2f}, Z1 Accuracy = {z1_accuracy:.2f}, Z2 Accuracy = {z2_accuracy:.2f}")
-
-    def _gene_epoch(self, epoch):
-        self.metric_tracker.reset()
-        self.model.train()
-
-        total_correct_z1 = 0
-        total_correct_z2 = 0
-        total_samples = 0
-
-        for data, batch_id, _ in self.dataloader:
-            data, batch_id = data.to(self.device), batch_id.to(self.device)
-            self.optimizer.zero_grad()
-
-            # Forward pass
-            if self.use_vamp:
-                bio_z, z1_q, z1_q_mean, z1_q_logvar, z2_q, z2_q_mean, z2_q_logvar, z1_p_mean, z1_p_logvar, batch_z, batch_mu, batch_logvar, bio_batch_pred, batch_batch_pred, _mean, _disp, _pi = self.model(data)
-            else:
-                bio_z, bio_mu, bio_logvar, batch_z, batch_mu, batch_logvar, bio_batch_pred, batch_batch_pred, _mean, _disp, _pi, size_factor, size_mu, size_logvar = self.model(data)
-
-            # zinb loss loss
-            recon_loss = self.gene_criterion_recon(data, _mean, _disp, _pi)
-            
-            # kl loss
-            if self.use_vamp:
-                kl_loss_1 = self.model.bio_encoder.Vamp_KL_loss(
-                                                        z1_q=z1_q, 
-                                                        z1_q_mean=z1_q_mean, 
-                                                        z1_q_logvar=z1_q_logvar, 
-                                                        z2_q=z2_q, 
-                                                        z2_q_mean=z2_q_mean, 
-                                                        z2_q_logvar=z2_q_logvar, 
-                                                        z1_p_mean=z1_p_mean, 
-                                                        z1_p_logvar=z1_p_logvar
-                                                     )
-            else:
-                 kl_loss_1 = kl_divergence(bio_mu, bio_logvar).mean()
-            kl_loss_2 = kl_divergence(batch_mu, batch_logvar).mean()
-            kl_loss_size = kl_divergence(size_mu, size_logvar).mean()
-
-            bio_z_prior = torch.randn_like(bio_z, device=self.device)
-            mmd_loss = self.mmd_loss(bio_z, bio_z_prior)
-
-            # classifier loss
-            batch_loss_z1 = self.criterion_classification(bio_batch_pred, batch_id)
-            batch_loss_z2 = self.criterion_classification(batch_batch_pred, batch_id)
-            
-            # Orthogonal loss
-            ortho_loss_value = orthogonal_loss(bio_z, batch_z)
-
-            # Total loss
-            loss = (self.loss_weights['recon_loss'] * recon_loss +
-                    self.loss_weights['batch_loss_z1'] * batch_loss_z1 +
-                    self.loss_weights['batch_loss_z2'] * batch_loss_z2 +
-                    self.loss_weights['kl_loss_1'] * kl_loss_1 +
+                    self.loss_weights['discriminator'] * batch_loss_z1 +
+                    self.loss_weights['classifier'] * batch_loss_z2 +
+                    self.loss_weights['kl_loss_1'] * mmd_loss +
                     self.loss_weights['kl_loss_2'] * kl_loss_2 +
                     self.loss_weights['ortho_loss'] * ortho_loss_value +
-                    self.loss_weights['kl_loss_size'] * kl_loss_size)
+                    (self.loss_weights['kl_loss_size'] * kl_loss_size if mode == 'rna' else 0))
 
             loss.backward()
             self.optimizer.step()
@@ -210,17 +129,13 @@ class Trainer:
             'Z2 Accuracy': z2_accuracy
         })
 
-        self.logger.info(f"Epoch {epoch}: Loss = {self.metric_tracker.avg('total_loss'):.2f}, kl_loss = {self.metric_tracker.avg('kl_loss_1'):.2f}, Z1 Accuracy = {z1_accuracy:.2f}, Z2 Accuracy = {z2_accuracy:.2f}")
-
-    def train(self, gene=True):
-        for epoch in range(1, self.epochs):
-            if gene:
-                self._gene_train(epoch)
-            else:
-                self._imc_epoch(epoch)
-            
-            if epoch % self.save_period == 0:
-                self._save_checkpoint(epoch)
+        self.logger.info(
+            f"Epoch {epoch}: "
+            f"Loss = {self.metric_tracker.avg('total_loss'):.2f}, "
+            f"KL Loss = {self.metric_tracker.avg('kl_loss_1'):.2f}, "
+            f"Z1 Accuracy = {z1_accuracy:.2f}, "
+            f"Z2 Accuracy = {z2_accuracy:.2f}"
+        )
 
     def _save_checkpoint(self, epoch):
         """

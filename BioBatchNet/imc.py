@@ -11,8 +11,6 @@ from utils.util import prepare_device
 from utils.trainer import Trainer
 import random
 
-
-
 def main(config):
     logger = config.get_logger('train')
 
@@ -28,7 +26,7 @@ def main(config):
     # prepare data
     dataset_name = config['data_loader']['type'] 
     train_dataset = GeneralDataset(dataset_name)
-    train_dataloader = DataLoader(train_dataset, shuffle=True, batch_size=256)
+    train_dataloader = config.init_obj('data_loader', DataLoader, train_dataset)
 
     # build model
     BioBatchNet = config.init_obj('arch', model)
