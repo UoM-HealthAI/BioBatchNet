@@ -2,6 +2,7 @@
 BioBatchNet/saved/
 BioBatchNet/Results/
 BioBatchNet/logger/
+BioBatchNet/wandb/
 
 Baseline/results/
 Baseline/notebook/
