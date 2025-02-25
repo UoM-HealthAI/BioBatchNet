@@ -2,7 +2,6 @@ import argparse
 import collections
 import torch
 import numpy as np
-from torch.utils.data import DataLoader
 
 from parse_config import ConfigParser
 import models.model as model
@@ -26,8 +25,8 @@ def main(config):
     # prepare data
     dataset_name = config['name']
     train_dataset = IMCDataset(dataset_name)
-    train_dataloader = DataLoader(train_dataset, batch_size=128, shuffle=True, num_workers=2)
-    # train_dataloader = config.init_obj('data_loader', DataLoader)
+    # train_dataloader = DataLoader(train_dataset, batch_size=128, shuffle=True, num_workers=2)
+    train_dataloader = config.init_obj('data_loader', torch.utils.data , train_dataset)
 
     # build model
     BioBatchNet = config.init_obj('arch', model)

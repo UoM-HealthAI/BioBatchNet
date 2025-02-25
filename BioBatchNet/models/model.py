@@ -32,6 +32,8 @@ class IMCVAE(nn.Module):
         # adversarial
         bio_z_grl = self.grl(bio_z)
         bio_batch_pred = self.bio_classifier(bio_z_grl)
+
+        # classifier
         batch_batch_pred = self.batch_classifier(batch_z)
 
         # reconstruction
@@ -45,16 +47,12 @@ class GeneVAE(nn.Module):
 
         for key, value in args.items():
             setattr(self, key, value)
-    
-        if self.use_vamp:
-            vamp_encoder_args = getattr(self, 'vamp_encoder_args', {})
-            self.bio_encoder = VampEncoder(**vamp_encoder_args)
-        else: 
-            self.bio_encoder = BaseEncoder(self.in_sz, self.bio_encoder_hidden_layers, self.latent_sz)
 
+        self.bio_encoder = BaseEncoder(self.in_sz, self.bio_encoder_hidden_layers, self.latent_sz)
         self.batch_encoder = BaseEncoder(self.in_sz, self.batch_encoder_hidden_layers, self.latent_sz)
+        self.size_encoder = BaseEncoder(self.in_sz, self.bio_encoder_hidden_layers, 1)
         
-        self.decoder = BaseDecoder(2*self.latent_sz, self.decoder_hidden_layers, out_sz=1000)
+        self.decoder = BaseDecoder(2 * self.latent_sz, self.decoder_hidden_layers, out_sz=1000)
         self.mean_decoder = nn.Sequential(nn.Linear(1000,  self.out_sz), MeanAct())  
         self.dispersion_decoder = nn.Sequential(nn.Linear(1000,  self.out_sz), DispAct())
         self.dropout_decoder = nn.Sequential(nn.Linear(1000,  self.out_sz), nn.Sigmoid())
@@ -62,20 +60,15 @@ class GeneVAE(nn.Module):
         self.bio_classifier = BaseClassifier(self.latent_sz, self.batch_classifier_layers_power, self.num_batch)
         self.batch_classifier = BaseClassifier(self.latent_sz, self.batch_classifier_layers_weak, self.num_batch)
 
-        self.size_encoder = BaseEncoder(self.in_sz, self.bio_encoder_hidden_layers, 1)
-
         self.alpha = 1
         self.grl = GRL(alpha=self.alpha)
 
     def forward(self, x): 
         # bio information 
-        if self.use_vamp:
-            z1_q, z1_q_mean, z1_q_logvar, z2_q, z2_q_mean, z2_q_logvar, z1_p_mean, z1_p_logvar, bio_z = self.bio_encoder(x)
-        else:
-            bio_z, mu1, logvar1 = self.bio_encoder(x)
-            logvar1 = torch.clamp(logvar1, min=-3, max=3)
-
+        bio_z, mu1, logvar1 = self.bio_encoder(x)
+        logvar1 = torch.clamp(logvar1, min=-3, max=3)
         size_factor, size_mu, size_logvar = self.size_encoder(x)
+
         # batch information
         batch_z, batch_mu, batch_logvar = self.batch_encoder(x)
 
@@ -85,25 +78,21 @@ class GeneVAE(nn.Module):
         # adversarial
         bio_z_grl = self.grl(bio_z)
         bio_batch_pred = self.bio_classifier(bio_z_grl)
+        
+        # classifier
         batch_batch_pred = self.batch_classifier(batch_z)
 
-        # h
+        # zinb 
         h = self.decoder(z_combine)
-       
-        # zinb output
         size_factor = torch.clamp(size_factor, min=-10, max=10)
         _mean = self.mean_decoder(h) * torch.exp(size_factor)
         _mean = torch.clamp(_mean, 1e-5, 1e6)
 
         _disp = self.dispersion_decoder(h)
-        
         _pi = self.dropout_decoder(h)
         _pi = torch.clamp(_pi, 1e-4, 1.0 - 1e-4)
 
-        if self.use_vamp:
-            return bio_z, z1_q, z1_q_mean, z1_q_logvar, z2_q, z2_q_mean, z2_q_logvar, z1_p_mean, z1_p_logvar, batch_z, batch_mu, batch_logvar, bio_batch_pred, batch_batch_pred, _mean, _disp, _pi
-        else:
-            return bio_z, mu1, logvar1, batch_z, batch_mu, batch_logvar, bio_batch_pred, batch_batch_pred, _mean, _disp, _pi, size_factor, size_mu, size_logvar
+        return bio_z, mu1, logvar1, batch_z, batch_mu, batch_logvar, bio_batch_pred, batch_batch_pred, _mean, _disp, _pi, size_factor, size_mu, size_logvar
         
 class MeanAct(nn.Module):
     def __init__(self):

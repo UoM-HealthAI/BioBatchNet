@@ -17,9 +17,8 @@ arch:
     cell_classifier_layers: [64, 32]
 
 data_loader:
-  type: IMCDataset
+  type: DataLoader
   args:
-    dataset: 'IMMUcan'
     batch_size: 128
     shuffle: true
     num_workers: 2
