@@ -2,8 +2,15 @@
 BioBatchNet/saved/
 BioBatchNet/Results/
 BioBatchNet/logger/
-scExperiment_IMC/
+
+Evaluation/results/
+Evaluation/notebook/
+Evaluation/logs/
+Evaluation/bash/
+Evaluation/scib/
+
 CPC/
+Data/
 
 # Ignore Python virtual environments
 venv/
