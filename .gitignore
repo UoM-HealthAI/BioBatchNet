@@ -3,11 +3,11 @@ BioBatchNet/saved/
 BioBatchNet/Results/
 BioBatchNet/logger/
 
-Evaluation/results/
-Evaluation/notebook/
-Evaluation/logs/
-Evaluation/bash/
-Evaluation/scib/
+Baseline/results/
+Baseline/notebook/
+Baseline/logs/
+Baseline/bash/
+Baseline/scib/
 
 CPC/
 Data/

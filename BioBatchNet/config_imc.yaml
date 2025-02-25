@@ -1,25 +1,25 @@
-name: Hoch
+name: IMMUcan
 n_gpu: 1
 seed: null
 
 arch:
   type: IMCVAE
   args:
-    in_sz: 41
+    in_sz: 40
     bio_encoder_hidden_layers: [500, 2000, 2000]
     batch_encoder_hidden_layers: [500]
     latent_sz: 20
     decoder_hidden_layers: [2000, 2000, 500]
-    out_sz: 41
+    out_sz: 40
     batch_classifier_layers_power: [500, 2000, 2000]
     batch_classifier_layers_weak: [128]
-    num_batch: 39
+    num_batch: 4
     cell_classifier_layers: [64, 32]
 
 data_loader:
-  type: Hoch
+  type: IMCDataset
   args:
-    dataset: null  
+    dataset: 'IMMUcan'
     batch_size: 128
     shuffle: true
     num_workers: 2
@@ -29,15 +29,13 @@ optimizer:
   args:
     weight_decay: 0.00001
     amsgrad: true
-    param_groups:
-      bio_encoder: 0.0001
-      batch_encoder: 0.0001
-      decoder: 0.0001
-      mean_decoder: 0.0001
-      dispersion_decoder: 0.0001
-      dropout_decoder: 0.0001
-      bio_classifier: 0.001
-      batch_classifier: 0.0001
+    
+param_groups:
+  bio_encoder: 0.0001
+  batch_encoder: 0.0001
+  decoder: 0.0001
+  bio_classifier: 0.001
+  batch_classifier: 0.0001
 
 lr_scheduler:
   type: StepLR

@@ -4,35 +4,35 @@ import pandas as pd
 import torch
 from pathlib import Path
 
-class GeneralDataset(Dataset):
-    BASE_DIR = Path(__file__).resolve().parent.parent
+class IMCDataset(Dataset):
+    BASE_DIR = Path(__file__).resolve().parent.parent.parent
     dataset_configs = {
         'Damond': {
             'feature_cols': (0, 38),
             'batch_col': 40,
             'cell_type_col': 38,
-            'datadir': BASE_DIR / 'Data/IMC_data/csv_format/Damond_2019_Pancreas.csv'
+            'datadir': BASE_DIR / 'Data/IMC/Damond_2019_Pancreas.csv'
         },
         
         'Damond_full': {
             'feature_cols': (0, 38),
             'batch_col': 38,
             'cell_type_col': 39,
-            'datadir': BASE_DIR / '/home/haiping_liu/code/My_model/BioBatchNet_project/BioBatchNet/Data/IMC_data/csv_format/Damond_2019_Pancreas_IMC_subset_cleaned.csv'
+            'datadir': BASE_DIR / 'Data/IMC/Damond_2019_Pancreas_IMC_subset_cleaned.csv'
         },
 
         'Hoch': {
             'feature_cols': (0, 41),
             'batch_col': 42,
             'cell_type_col': 41,
-            'datadir': BASE_DIR / 'Data/IMC_data/csv_format/HochSchulz.csv'
+            'datadir': BASE_DIR / 'Data/IMC/HochSchulz.csv'
         },
 
-        'IMMU': {
+        'IMMUcan': {
             'feature_cols': (0, 40),
             'batch_col': 41,
             'cell_type_col': 40,
-            'datadir': BASE_DIR / 'Data/IMC_data/csv_format/IMMUcan_batch.csv'
+            'datadir': BASE_DIR / 'Data/IMC/IMMUcan_batch.csv'
         },
     }
 
@@ -43,6 +43,9 @@ class GeneralDataset(Dataset):
             raise ValueError(f"Dataset {dataset_name} is not recognized")
         
         config = self.dataset_configs[dataset_name]
+        self.load_data(config)
+
+    def load_data(self, config):
         feature_cols = config['feature_cols']
         cell_cols = config['cell_type_col']
         batch_col = config['batch_col']
@@ -51,11 +54,8 @@ class GeneralDataset(Dataset):
         self.data = pd.read_csv(data_dir)
         self.features = torch.tensor(self.data.iloc[:, feature_cols[0]:feature_cols[1]].values.astype(np.float32))
         
-        # Retain cell type as both codes and categories
         cell_type_categorical = pd.Categorical(self.data.iloc[:, cell_cols])
-        self.cell_type = torch.tensor(cell_type_categorical.codes, dtype=torch.int64)
-        self.cell_type_names = cell_type_categorical.categories  # Store the original names
-        
+        self.cell_type = torch.tensor(cell_type_categorical.codes, dtype=torch.int64)        
         self.batch_id = torch.tensor(pd.Categorical(self.data.iloc[:, batch_col]).codes, dtype=torch.int64)
 
     def __getitem__(self, index):

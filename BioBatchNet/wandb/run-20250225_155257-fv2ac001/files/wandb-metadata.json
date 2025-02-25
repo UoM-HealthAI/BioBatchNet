@@ -1,0 +1,65 @@
+{
+  "os": "Linux-3.10.0-1160.118.1.el7.x86_64-x86_64-with-glibc2.17",
+  "python": "3.8.20",
+  "startedAt": "2025-02-25T15:52:57.057195Z",
+  "args": [
+    "-c",
+    "config_imc.yaml"
+  ],
+  "program": "imc.py",
+  "codePath": "BioBatchNet/imc.py",
+  "git": {
+    "remote": "git@github.com:Haiping-Liu/BioBatchNetV1.git",
+    "commit": "04c52c190badea13eb5ecd59f5730ce880b95b2e"
+  },
+  "email": "haiping.liu@postgrad.manchester.ac.uk",
+  "root": "/net/scratch2/w29632hl/code/haiping/BioBatchNet_project/BioBatchNet",
+  "host": "node804.pri.csf3.alces.network",
+  "username": "w29632hl",
+  "executable": "/mnt/iusers01/fatpou01/compsci01/w29632hl/.conda/envs/BioBatchNet/bin/python",
+  "codePathLocal": "imc.py",
+  "cpu_count": 32,
+  "cpu_count_logical": 32,
+  "gpu": "Tesla V100-SXM2-16GB",
+  "gpu_count": 4,
+  "disk": {
+    "/": {
+      "total": "22592438272",
+      "used": "10511679488"
+    }
+  },
+  "memory": {
+    "total": "201185705984"
+  },
+  "cpu": {
+    "count": 32,
+    "countLogical": 32
+  },
+  "gpu_nvidia": [
+    {
+      "name": "Tesla V100-SXM2-16GB",
+      "memoryTotal": "17179869184",
+      "cudaCores": 5120,
+      "architecture": "Volta"
+    },
+    {
+      "name": "Tesla V100-SXM2-16GB",
+      "memoryTotal": "17179869184",
+      "cudaCores": 5120,
+      "architecture": "Volta"
+    },
+    {
+      "name": "Tesla V100-SXM2-16GB",
+      "memoryTotal": "17179869184",
+      "cudaCores": 5120,
+      "architecture": "Volta"
+    },
+    {
+      "name": "Tesla V100-SXM2-16GB",
+      "memoryTotal": "17179869184",
+      "cudaCores": 5120,
+      "architecture": "Volta"
+    }
+  ],
+  "cudaVersion": "12.4"
+}

@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 
 from parse_config import ConfigParser
 import models.model as model
-from utils.dataset import GeneralDataset
+from utils.dataset import IMCDataset
 from utils.util import prepare_device
 from utils.trainer import Trainer
 import random
@@ -24,9 +24,10 @@ def main(config):
     random.seed(SEED)
 
     # prepare data
-    dataset_name = config['data_loader']['type'] 
-    train_dataset = GeneralDataset(dataset_name)
-    train_dataloader = config.init_obj('data_loader', DataLoader, train_dataset)
+    dataset_name = config['name']
+    train_dataset = IMCDataset(dataset_name)
+    train_dataloader = DataLoader(train_dataset, batch_size=128, shuffle=True, num_workers=2)
+    # train_dataloader = config.init_obj('data_loader', DataLoader)
 
     # build model
     BioBatchNet = config.init_obj('arch', model)
@@ -38,15 +39,18 @@ def main(config):
     if len(device_ids) > 1:
         BioBatchNet = torch.nn.DataParallel(BioBatchNet, device_ids=device_ids)
 
-    # train
-    optimizer = torch.optim.Adam([
-        {'params': BioBatchNet.bio_encoder.parameters(), 'lr': 1e-4},
-        {'params': BioBatchNet.batch_encoder.parameters(), 'lr': 1e-4},
-        {'params': BioBatchNet.decoder.parameters(), 'lr': 1e-4},
-        {'params': BioBatchNet.bio_classifier.parameters(), 'lr': 1e-4},
-        {'params': BioBatchNet.batch_classifier.parameters(), 'lr': 1e-4},
-    ], weight_decay=1e-4)
+    # optimizer
+    param_groups = config['param_groups']
+    optimizer = config.init_obj('optimizer', torch.optim, [
+        {'params': BioBatchNet.bio_encoder.parameters(), 'lr': param_groups['bio_encoder']},
+        {'params': BioBatchNet.batch_encoder.parameters(), 'lr': param_groups['batch_encoder']},
+        {'params': BioBatchNet.decoder.parameters(), 'lr': param_groups['decoder']},
+        {'params': BioBatchNet.bio_classifier.parameters(), 'lr': param_groups['bio_classifier']},
+        {'params': BioBatchNet.batch_classifier.parameters(), 'lr': param_groups['batch_classifier']}
+    ])
     lr_scheduler = config.init_obj('lr_scheduler', torch.optim.lr_scheduler, optimizer)
+
+    # trainer
     trainer = Trainer(config, 
                       model = BioBatchNet, 
                       optimizer = optimizer, 
@@ -54,6 +58,7 @@ def main(config):
                       scheduler = lr_scheduler, 
                       device = device)
     
+    # train
     logger.info("------------------training begin------------------")
     trainer.train()
 
