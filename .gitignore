@@ -12,6 +12,7 @@ Baseline/scib/
 
 CPC/
 Data/
+csf_log/
 
 # Ignore Python virtual environments
 venv/

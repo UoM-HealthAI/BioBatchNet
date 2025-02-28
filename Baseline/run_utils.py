@@ -52,9 +52,9 @@ class RunBaseline:
         adata_base = RunBaseline.create_adata(self.features, self.batch, self.celltype)
         outputs = {
             "Raw": self.process_adata,
-            "Harmony": run_harmony(adata_base.copy()),
-            "BBKNN": run_bbknn(adata_base.copy()),
-            "Scanorama": run_scanorama(adata_base.copy()),
+            # "Harmony": run_harmony(adata_base.copy()),
+            # "BBKNN": run_bbknn(adata_base.copy()),
+            # "Scanorama": run_scanorama(adata_base.copy()),
             "Combat": run_combat(adata_base.copy()),
         }
         return outputs
