@@ -74,6 +74,12 @@ def evaluate_NN(adata_dict, seed=42):
             sub_adata = subsample_data(adata, seed=seed)
             sc.pp.neighbors(sub_adata, use_rep=embed)  
             results[key] = compute_metrics(sub_raw_adata, sub_adata, batch_key, label_key, type='embed', embed=embed)
+        
+        elif key == 'BioBatchNet':
+            embed = 'X_biobatchnet'
+            sub_adata = subsample_data(adata, seed=seed)
+            sc.pp.neighbors(sub_adata, use_rep=embed)  
+            results[key] = compute_metrics(sub_raw_adata, sub_adata, batch_key, label_key, type='embed', embed=embed)
     
     return results
 

@@ -57,7 +57,7 @@ def main(config):
                       scheduler = lr_scheduler, 
                       device = device)
     
-    # train
+    # Start training
     logger.info("------------------training begin------------------")
     trainer.train()
 
@@ -80,4 +80,7 @@ if __name__ == '__main__':
     config = ConfigParser.from_args(args, options)
     main(config)
 
-    
+
+
+from Baseline.evaluation import evaluate_NN
+
