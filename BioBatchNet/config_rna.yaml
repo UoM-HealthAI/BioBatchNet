@@ -1,6 +1,7 @@
 name: macaque
 n_gpu: 1
-seed: null
+train_seed_list: [42, 52, 62] 
+eval_sampling_seed: [42]
 
 arch:
   type: GeneVAE
@@ -25,13 +26,20 @@ arch:
       z2_size: 20
       number_components: 12
 
-data_loader:
-  type: Immune
+train_data_loader:
+  type: DataLoader
   args:
-    dataset: null  
     batch_size: 128
     shuffle: true
     num_workers: 2
+
+test_data_loader:
+  type: DataLoader
+  args:
+    batch_size: 128
+    shuffle: False
+    num_workers: 2
+
 
 optimizer:
   type: Adam

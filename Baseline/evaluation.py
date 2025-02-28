@@ -9,10 +9,10 @@ def subsample_data(adata, fraction=0.3, seed=42):
     sc.pp.subsample(adata, fraction=fraction, random_state=seed)
     return adata
 
-def evaluate_non_NN(adata_dict, seed):
+def evaluate_methods(adata_dict, seed, method_mapping):
     results = {}
-    batch_key = 'BATCH'  
-    label_key = 'celltype'  
+    batch_key = 'BATCH'
+    label_key = 'celltype'
 
     raw_adata = adata_dict.get('Raw')
     sub_raw_adata = subsample_data(raw_adata, seed=seed)
@@ -51,7 +51,7 @@ def evaluate_non_NN(adata_dict, seed):
 
     return results
 
-def evaluate_NN(adata_dict, seed=42):
+def evaluate_NN(adata_dict, seed):
     """
     Evaluate NN method
     """
