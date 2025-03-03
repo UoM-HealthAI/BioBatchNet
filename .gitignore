@@ -13,6 +13,7 @@ CPC/
 Data/
 csf_log/
 Logs/
+Results/
 
 # Ignore Python virtual environments
 venv/
