@@ -4,18 +4,18 @@ from sklearn.metrics import adjusted_rand_score, normalized_mutual_info_score
 import numpy as np
 
 
-def subsample_data(adata, fraction=0.3, seed=42):
+def subsample_data(adata, fraction, seed=42):
     np.random.seed(seed)
     sc.pp.subsample(adata, fraction=fraction, random_state=seed)
     return adata
 
-def evaluate_methods(adata_dict, seed, method_mapping):
+def evaluate_non_nn(adata_dict, fraction=0.01, seed=42):
     results = {}
     batch_key = 'BATCH'
     label_key = 'celltype'
 
     raw_adata = adata_dict.get('Raw')
-    sub_raw_adata = subsample_data(raw_adata, seed=seed)
+    sub_raw_adata = subsample_data(raw_adata, fraction=fraction, seed=seed)
 
     for key, adata in adata_dict.items():
         if key == 'Raw':
@@ -26,58 +26,58 @@ def evaluate_methods(adata_dict, seed, method_mapping):
 
         elif key == 'Harmony':
             embed = 'X_pca_harmony'
-            sub_adata = subsample_data(adata, seed=seed)
+            sub_adata = subsample_data(adata, fraction=fraction, seed=seed)
             sc.pp.neighbors(sub_adata, use_rep=embed)
             results[key] = compute_metrics(sub_raw_adata, sub_adata, batch_key, label_key, type='embed', embed=embed)
 
         elif key == 'BBKNN':
             embed = 'X_pca'
-            sub_adata = subsample_data(adata, seed=seed)
+            sub_adata = subsample_data(adata, fraction=fraction, seed=seed)
             sc.pp.neighbors(sub_adata, use_rep=embed)
             results[key] = compute_metrics(sub_raw_adata, sub_adata, batch_key, label_key, type='embed', embed=embed)
         
         elif key == 'Scanorama':
             embed = 'X_scanorama'
-            sub_adata = subsample_data(adata, seed=seed)
+            sub_adata = subsample_data(adata, fraction=fraction, seed=seed)
             sc.pp.neighbors(sub_adata, use_rep=embed)
             results[key] = compute_metrics(sub_raw_adata, sub_adata, batch_key, label_key, type='embed', embed=embed)
 
         elif key == 'Combat':
             embed = 'X_pca'
-            sub_adata = subsample_data(adata, seed=seed)
+            sub_adata = subsample_data(adata, fraction=fraction, seed=seed)
             sc.pp.pca(sub_adata)  
-            sc.pp.neighbors(adata, use_rep=embed)  
+            sc.pp.neighbors(sub_adata, use_rep=embed)  
             results[key] = compute_metrics(sub_raw_adata, sub_adata, batch_key, label_key, type='full', embed=embed)
 
     return results
 
-def evaluate_NN(adata_dict, seed):
+def evaluate_nn(adata_dict, fraction, seed):
     """
-    Evaluate NN method
+    Evaluate nn method
     """
     results = {}
     batch_key='BATCH'
     label_key='celltype'
 
     raw_adata = adata_dict.get('Raw')
-    sub_raw_adata = subsample_data(raw_adata, seed=seed)
+    sub_raw_adata = subsample_data(raw_adata, fraction=fraction, seed=seed)
 
     for key, adata in adata_dict.items():
         if key == 'scVI':
             embed = 'X_scvi'
-            sub_adata = subsample_data(adata, seed=seed)
+            sub_adata = subsample_data(adata, fraction=fraction, seed=seed)
             sc.pp.neighbors(sub_adata, use_rep=embed)  
             results[key] = compute_metrics(sub_raw_adata, sub_adata, batch_key, label_key, type='embed', embed=embed)
 
         elif key == 'iMAP':
             embed = 'X_pca'
-            sub_adata = subsample_data(adata, seed=seed)
+            sub_adata = subsample_data(adata, fraction=fraction, seed=seed)
             sc.pp.neighbors(sub_adata, use_rep=embed)  
             results[key] = compute_metrics(sub_raw_adata, sub_adata, batch_key, label_key, type='embed', embed=embed)
         
         elif key == 'BioBatchNet':
             embed = 'X_biobatchnet'
-            sub_adata = subsample_data(adata, seed=seed)
+            sub_adata = subsample_data(adata, fraction=fraction, seed=seed)
             sc.pp.neighbors(sub_adata, use_rep=embed)  
             results[key] = compute_metrics(sub_raw_adata, sub_adata, batch_key, label_key, type='embed', embed=embed)
     

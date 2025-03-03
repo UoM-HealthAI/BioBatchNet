@@ -6,13 +6,13 @@ BioBatchNet/wandb/
 
 Baseline/results/
 Baseline/notebook/
-Baseline/logs/
 Baseline/bash/
 Baseline/scib/
 
 CPC/
 Data/
 csf_log/
+Logs/
 
 # Ignore Python virtual environments
 venv/

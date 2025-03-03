@@ -1,22 +1,36 @@
-# pothole_submit.sh
 #!/bin/bash --login
 #$ -cwd
-#$ -l v100           # A 1-GPU request (v100 is just a shorter name for nvidia_v100)
-                     # Can instead use 'a100' for the A100 GPUs (if permitted!)
-#$ -N test_scib       # job name
-#$ -pe smp.pe 8      # 4 CPU cores available to the host code
-                     # Can use up to 12 CPUs with an A100 GPU.
+#$ -pe smp.pe 8  # 请求 8 核 CPU
+#$ -l h_vmem=32G  # 请求 32GB 内存
+#$ -l v100 
+#$ -j y  # 结合标准输出和错误输出
 
-# This will upload your current environment to the working node                      
-#$ -V                # load current environment
+#$ -o ~/scratch/code/haiping/BioBatchNet_project/csf_log/run_baseline_log.txt # output directory
+#$ -e ~/scratch/code/haiping/BioBatchNet_project/csf_log/run_baseline_error.txt   # error directory 
 
-#$ -o ~/scratch/code/haiping/BioBatchNet_project/csf_log/run_baseline/output_plot2.txt  # output directory
-#$ -e ~/scratch/code/haiping/BioBatchNet_project/csf_log/run_baseline/error_plot2.txt   # error directory 
 
-# load extra environments if needed (but if -V, normally don't have to)
-# module load libs/nvidia-hpc-sdk/23.9
-module load apps/binapps/anaconda3/2022.10
-source activate scvi
+module load libs/cuda
 
-# Run your project
-python ../Baseline/run_baseline.py
+SIF_PATH="/mnt/iusers01/fatpou01/compsci01/w29632hl/scratch/BioBatchNet-csf3ready.sif"
+SCRIPT_PATH="run_baseline.py"
+CONDA_ENV="BioBatchNet"
+
+if [ -n "$CUDA_VISIBLE_DEVICES" ]; then
+   export SINGULARITYENV_CUDA_VISIBLE_DEVICES="$CUDA_VISIBLE_DEVICES"
+   NVIDIAFLAG=--nv
+fi
+
+echo "Starting Singularity GPU job on $(hostname)"
+echo "Running with CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES"
+
+# 使用容器内的conda
+singularity exec $NVIDIAFLAG --bind /scratch,/mnt $SIF_PATH bash -c "
+    export CONDA_PREFIX='/opt/miniconda'
+    export PATH=\"\$CONDA_PREFIX/bin:\$PATH\"
+    source \$CONDA_PREFIX/etc/profile.d/conda.sh
+    conda activate $CONDA_ENV
+    cd /scratch/w29632hl/code/haiping/BioBatchNet_project/Baseline  
+    python $SCRIPT_PATH
+"
+
+echo "Job finished"

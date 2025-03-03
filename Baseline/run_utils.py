@@ -8,6 +8,7 @@ import bbknn
 import imap
 import pandas as pd
 import gc
+from logger_config import logger
 
 class RunBaseline:
     def __init__(self, adata, mode):
@@ -32,10 +33,14 @@ class RunBaseline:
         adata_imap = self.raw_adata.copy()
         adata_imap.obs['batch'] = self.batch.astype("category") 
         adata_imap.obs['celltype'] = self.celltype.astype("category")
-
-        output_scvi = run_scvi(adata_base, mode=self.mode)
-        output_imap = run_imap(adata_imap, model=self.mode)
         
+        output_scvi = run_scvi(adata_base, mode=self.mode)
+        logger.info("run scvi finished")
+
+        logger.info("begin to run imap")
+        output_imap = run_imap(adata_imap, mode=self.mode)
+        logger.info("run imap finished")
+
         gc.collect()
         return {"Raw": self.process_adata,
                 "scVI": output_scvi, 
@@ -76,7 +81,6 @@ class RunBaseline:
         adata.obs['celltype'] = celltype
         return adata
 
-
 def run_scvi(adata_scvi, mode):
     scvi.model.SCVI.setup_anndata(adata_scvi, batch_key="BATCH")  
     if mode == 'imc':
@@ -89,9 +93,14 @@ def run_scvi(adata_scvi, mode):
     return adata_scvi
 
 def run_imap(adata_imap, mode):
+    logger.info(adata_imap)
+    logger.info(adata_imap.obs.head())
+    logger.info(adata_imap.var.head())
+
     adata_imap = imap.stage1.data_preprocess(adata_imap, 'batch') if mode == 'rna' else adata_imap
-    EC, ec_data = imap.stage1.iMAP_fast(adata_imap, key="batch", n_epochs=1) 
-    output_results = imap.stage2.integrate_data(adata_imap, ec_data, inc = False, n_epochs=1)
+    logger.info("after imap.stage1.data_preprocess")
+    EC, ec_data = imap.stage1.iMAP_fast(adata_imap, key="batch", n_epochs=10) 
+    output_results = imap.stage2.integrate_data(adata_imap, ec_data, inc=False, n_epochs=10)
     output_imap = sc.AnnData(output_results)
     output_imap.obs['celltype'] = adata_imap.obs['celltype'].values
     output_imap.obs['BATCH'] = adata_imap.obs['batch'].values
