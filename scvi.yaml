@@ -1,11 +1,10 @@
 name: scvi
 channels:
-  - conda-forge
-  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main
-  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main/
-  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/free/
-  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/pytorch/
   - defaults
+  - pytorch
+  - conda-forge
+  - https://repo.anaconda.com/pkgs/main
+  - https://repo.anaconda.com/pkgs/r
 dependencies:
   - _libgcc_mutex=0.1
   - _openmp_mutex=5.1
