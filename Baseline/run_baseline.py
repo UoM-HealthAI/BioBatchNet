@@ -10,20 +10,31 @@ from logger_config import logger
 from pathlib import Path
 
 class BaselineEvaluator:
-    def __init__(self, adata, mode, sampling_seed=42, seed_list=[42, 52, 62]):
+    def __init__(self, adata, mode, sampling_fraction=0.5, sampling_seed=42, seed_list=[42, 52, 62]):
         """
         Initialize the BaselineEvaluator class.
         :param adata: Original AnnData object.
         :param mode: Mode for running baseline (e.g., 'rna' or 'imc').
+        :param sampling_fraction: Fraction of data to use for evaluation (default: 0.5)
+        :param sampling_seed: Seed for sampling
         :param seed_list: List of random seeds for experiments.
         """
         self.adata = adata
         self.seed_list = seed_list
         self.mode = mode
+        self.sampling_fraction = sampling_fraction
         self.sampling_seed = sampling_seed
+        self.timing_results = {
+            'scVI': {'times': [], 'mean': None, 'std': None},
+            'iMAP': {'times': [], 'mean': None, 'std': None},
+            'Harmony': None,
+            'BBKNN': None,
+            'Scanorama': None,
+            'Combat': None
+        }
         
         logger.info("Starting BaselineEvaluator initialization...")
-        logger.info(f"Initialized BaselineEvaluator with mode={mode}, seeds={seed_list}")
+        logger.info(f"Initialized BaselineEvaluator with mode={mode}, seeds={seed_list}, sampling_fraction={sampling_fraction}")
         logger.info("Finished BaselineEvaluator initialization.")
 
     def run_single_nn(self, seed):
@@ -40,7 +51,13 @@ class BaselineEvaluator:
         torch.backends.cudnn.benchmark = False
 
         rb = RunBaseline(self.adata, mode=self.mode)
-        adata_dict = rb.run_nn()  # Run neural network methods
+        adata_dict = rb.train_nn()  # Run neural network methods
+        
+        # Collect timing results
+        timing_results = rb.get_timing_results()
+        for method in ['scVI', 'iMAP']:
+            self.timing_results[method]['times'].append(timing_results[method])
+        
         logger.info(f"Finished running NN methods for seed={seed}")
         return adata_dict
 
@@ -54,7 +71,7 @@ class BaselineEvaluator:
         
         for seed in tqdm(self.seed_list, desc="Evaluating NN Methods"):
             adata_dict = self.run_single_nn(seed)
-            metrics_run = evaluate_nn(adata_dict, fraction=0.01, seed=42)  # Fixed seed for sampling
+            metrics_run = evaluate_nn(adata_dict, fraction=self.sampling_fraction, seed=self.sampling_seed)
             
             for method, metrics in metrics_run.items():
                 if method not in aggregated_results:
@@ -69,48 +86,171 @@ class BaselineEvaluator:
                 for metric, values in metric_dict.items()
             }
 
+        # Calculate mean and std for timing results
+        for method in ['scVI', 'iMAP']:
+            times = self.timing_results[method]['times']
+            self.timing_results[method]['mean'] = np.mean(times)
+            self.timing_results[method]['std'] = np.std(times)
+            logger.info(f"{method} timing - mean: {np.mean(times):.2f}s, std: {np.std(times):.2f}s")
+
         return final_results
 
-    def run_non_nn(self):
+    def run_single_non_nn(self):
         """
         Evaluate non-NN methods once.
         """
         logger.info("Evaluating Non-NN Methods...")
         rb = RunBaseline(self.adata, mode=self.mode)
         logger.info("Run Baseline method finished")
-        adata_dict = rb.run_non_nn()  # Run non-NN methods
-        metrics_run = evaluate_non_nn(adata_dict, seed=42)  # Fixed seed for sampling
+        adata_dict = rb.train_non_nn()  # Run non-NN methods
         
+        # Collect timing results
+        timing_results = rb.get_timing_results()
+        for method in ['Harmony', 'BBKNN', 'Scanorama', 'Combat']:
+            self.timing_results[method] = timing_results[method]
+        
+        metrics_run = evaluate_non_nn(adata_dict, fraction=self.sampling_fraction, seed=42)  # Fixed seed for sampling
         logger.info(f"Non-NN Methods Evaluation: {metrics_run}")
         return metrics_run
 
-def main(adata_dir, save_dir):
+    def get_timing_results(self):
+        """
+        Get all timing results in a formatted dictionary
+        """
+        formatted_results = {}
+        
+        # Format NN methods results
+        for method in ['scVI', 'iMAP']:
+            formatted_results[method] = {
+                'mean_time': self.timing_results[method]['mean'],
+                'std_time': self.timing_results[method]['std'],
+                'all_times': self.timing_results[method]['times'],
+                'type': 'Neural Network'
+            }
+        
+        # Format non-NN methods results
+        for method in ['Harmony', 'BBKNN', 'Scanorama', 'Combat']:
+            formatted_results[method] = {
+                'mean_time': self.timing_results[method],
+                'std_time': None,
+                'all_times': [self.timing_results[method]],
+                'type': 'Non-Neural Network'
+            }
+        
+        return formatted_results
+
+def main(adata_dir, 
+         save_dir, 
+         mode, 
+         sampling_fraction, 
+         sampling_seed, 
+         seed_list):
+    
     logger.info(f"Loading AnnData from {adata_dir}")
     adata = sc.read_h5ad(adata_dir)
     logger.info("AnnData loaded successfully.")
-    evaluator = BaselineEvaluator(adata, mode='rna', sampling_seed=42, seed_list=[42])
+
+    evaluator = BaselineEvaluator(adata, 
+                                mode=mode, 
+                                sampling_fraction=sampling_fraction,
+                                sampling_seed=sampling_seed, 
+                                seed_list=seed_list)
 
     # evaluate NN methods
     logger.info("Starting evaluation of NN methods...")
     final_evaluation_nn = evaluator.run_multiple_nn()    
-    pd.DataFrame(final_evaluation_nn).to_csv(save_dir / 'results_nn.csv', index=True)
+    results_nn_path = os.path.join(save_dir, 'results_nn.csv')
+    pd.DataFrame(final_evaluation_nn).to_csv(results_nn_path, index=True)
     logger.info(f"NN Methods Evaluation Results saved to {save_dir}/results_nn.csv")
 
     # evaluate non-NN methods
-    # logger.info("Starting evaluation of non-NN methods...")
-    # final_evaluation_non_nn = evaluator.run_non_nn()
-    # logger.info(final_evaluation_non_nn)
-    # save_path = Path(save_dir) / 'results_non_nn.csv'
-    # pd.DataFrame(final_evaluation_non_nn).to_csv(save_path, index=True)
-    # logger.info(f"Non-NN Methods Evaluation Results saved to {save_dir}/results_non_nn.csv")
+    logger.info("Starting evaluation of non-NN methods...")
+    final_evaluation_non_nn = evaluator.run_single_non_nn()
+    logger.info(final_evaluation_non_nn)
+    results_non_nn_path = os.path.join(save_dir, 'results_non_nn.csv')
+    pd.DataFrame(final_evaluation_non_nn).to_csv(results_non_nn_path, index=True)
+    logger.info(f"Non-NN Methods Evaluation Results saved to {save_dir}/results_non_nn.csv")
+
+    # Save timing results in a single CSV
+    timing_results = evaluator.get_timing_results()
+    timing_df = pd.DataFrame.from_dict(timing_results, orient='index')
+    timing_df = timing_df.reset_index()
+    timing_df.columns = ['Method', 'Mean Time (s)', 'Std Time (s)', 'All Times (s)', 'Type']
+    timing_path = os.path.join(save_dir, 'timing_results.csv')
+    timing_df.to_csv(timing_path, index=False)
+    logger.info(f"Timing results saved to {timing_path}")
 
 if __name__ == "__main__":
     logger.info("Script execution started.")
-    data_name = "macaque"
-    adata_dir = f"../Data/scRNA-seq/{data_name}.h5ad"
-    save_dir = f"../Results/scRNA-seq/{data_name}"
-    if not os.path.exists(save_dir):
-        os.makedirs(save_dir)
-    logger.info(f"Results directory created at {save_dir}")
-    main(adata_dir, save_dir)
-    logger.info("Script execution finished.")
+
+    data_config = {
+        # 'HochSchulz': {
+        #     "mode": "imc",
+        #     "sampling_fraction": 0.1,
+        #     "sampling_seed": 42,
+        #     "seed_list": [42, 52, 62, 72, 82]
+        # },
+        # "IMMUcan_batch": {
+        #     "mode": "imc",
+        #     "sampling_fraction": 1,
+        #     "sampling_seed": 42,
+        #     "seed_list": [42, 52, 62, 72, 82]
+        # },
+        # 'Damond_batch': {
+        #     "mode": "imc",
+        #     "sampling_fraction": 0.01,
+        #     "sampling_seed": 42,
+        #     "seed_list": [42, 52, 62, 72, 82]
+        # },
+        # 'pancreas':{
+        #     "mode": "rna",
+        #     "sampling_fraction": 1,
+        #     "sampling_seed": 42,
+        #     "seed_list": [42, 52, 62, 72, 82]
+        # },
+        # 'macaque':{
+        #     "mode": "rna",
+        #     "sampling_fraction": 1,
+        #     "sampling_seed": 42,
+        #     "seed_list": [42, 52, 62, 72, 82]
+        # },
+        'Immune_ALL_human':{
+            "mode": "rna",
+            "sampling_fraction": 1,
+            "sampling_seed": 42,
+            "seed_list": [42, 52, 62, 72, 82]
+        },
+        'SubMouseBrain':{
+            "mode": "rna",
+            "sampling_fraction": 1,
+            "sampling_seed": 42,
+            "seed_list": [42, 52, 62, 72, 82]
+        }
+    }
+
+    for data_name, config in data_config.items():
+        mode = config["mode"]
+        sampling_fraction = config["sampling_fraction"]
+        sampling_seed = config["sampling_seed"]
+        seed_list = config["seed_list"]
+
+        if mode == 'imc':
+            adata_dir = f"../Data/IMC/h5ad_format/{data_name}.h5ad"
+            save_dir = f"../Results/IMC/{data_name}"
+        elif mode == 'rna':
+            adata_dir = f"../Data/scRNA-seq/{data_name}.h5ad"
+            save_dir = f"../Results/scRNA-seq/{data_name}"
+
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir)
+        logger.info(f"Results directory created at {save_dir}")
+
+        main(adata_dir, 
+             save_dir, 
+             mode=mode, 
+             sampling_fraction=sampling_fraction, 
+             sampling_seed=sampling_seed, 
+             seed_list=seed_list)
+        
+        logger.info(f"{data_name}'s task finished.")
+        break

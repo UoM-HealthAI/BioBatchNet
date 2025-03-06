@@ -8,6 +8,7 @@ import bbknn
 import imap
 import pandas as pd
 import gc
+import time
 from logger_config import logger
 
 class RunBaseline:
@@ -18,35 +19,50 @@ class RunBaseline:
         self.raw_adata = adata.copy()
         self.mode = mode
         self.process_adata = self.raw_adata if self.mode == 'imc' else self.rna_process(self.raw_adata)
+
         self.features = self.process_adata.X
         self.batch = pd.Categorical(self.process_adata.obs['BATCH'].values)
         self.celltype = pd.Categorical(self.process_adata.obs['celltype'].values)
+        self.timing_results = {}
 
-    def run_nn(self):
+    def train_nn(self):
         """
-        Run batch effect correction using neural network (NN)-based methods:
+        Train batch effect correction using neural network (NN)-based methods:
         - scVI
         - iMAP
         """
-        adata_base = RunBaseline.create_adata(self.features, self.batch, self.celltype)
+        adata_base = RunBaseline.create_adata(self.features, self.batch, self.celltype)    
 
-        adata_imap = self.raw_adata.copy()
+        if issparse(self.raw_adata.X):
+            adata_imap= sc.AnnData(self.raw_adata.X.toarray())
+        else:
+            adata_imap= sc.AnnData(self.raw_adata.X)
+
         adata_imap.obs['batch'] = self.batch.astype("category") 
         adata_imap.obs['celltype'] = self.celltype.astype("category")
-        
-        output_scvi = run_scvi(adata_base, mode=self.mode)
-        logger.info("run scvi finished")
 
-        logger.info("begin to run imap")
+        # Run and time scVI
+        start_time = time.time()
+        output_scvi = run_scvi(adata_base, mode=self.mode)
+        end_time = time.time()
+        scvi_time = end_time - start_time
+        logger.info(f"scVI time: {scvi_time:.2f}s")
+        self.timing_results['scVI'] = scvi_time
+
+        # Run and time iMAP
+        start_time = time.time()
         output_imap = run_imap(adata_imap, mode=self.mode)
-        logger.info("run imap finished")
+        end_time = time.time()
+        imap_time = end_time - start_time
+        logger.info(f"iMAP time: {imap_time:.2f}s")
+        self.timing_results['iMAP'] = imap_time
 
         gc.collect()
         return {"Raw": self.process_adata,
                 "scVI": output_scvi, 
                 "iMAP": output_imap}
     
-    def run_non_nn(self):
+    def train_non_nn(self):
         """
         Run non-NN methods:
         - Harmony
@@ -55,17 +71,55 @@ class RunBaseline:
         - Combat
         """
         adata_base = RunBaseline.create_adata(self.features, self.batch, self.celltype)
-        outputs = {
-            "Raw": self.process_adata,
-            "Harmony": run_harmony(adata_base.copy()),
-            "BBKNN": run_bbknn(adata_base.copy()),
-            "Scanorama": run_scanorama(adata_base.copy()),
-            "Combat": run_combat(adata_base.copy()),
-        }
+        outputs = {"Raw": self.process_adata}
+        
+        # Run and time Harmony
+        start_time = time.time()
+        outputs["Harmony"] = run_harmony(adata_base.copy())
+        end_time = time.time()
+        harmony_time = end_time - start_time
+        logger.info(f"Harmony time: {harmony_time:.2f}s")
+        self.timing_results['Harmony'] = harmony_time
+
+        # Run and time BBKNN
+        start_time = time.time()
+        outputs["BBKNN"] = run_bbknn(adata_base.copy())
+        end_time = time.time()
+        bbknn_time = end_time - start_time
+        logger.info(f"BBKNN time: {bbknn_time:.2f}s")
+        self.timing_results['BBKNN'] = bbknn_time
+
+        # Run and time Scanorama
+        start_time = time.time()
+        outputs["Scanorama"] = run_scanorama(adata_base.copy())
+        end_time = time.time()
+        scanorama_time = end_time - start_time
+        logger.info(f"Scanorama time: {scanorama_time:.2f}s")
+        self.timing_results['Scanorama'] = scanorama_time
+
+        # Run and time Combat
+        start_time = time.time()
+        outputs["Combat"] = run_combat(adata_base.copy())
+        end_time = time.time()
+        combat_time = end_time - start_time
+        logger.info(f"Combat time: {combat_time:.2f}s")
+        self.timing_results['Combat'] = combat_time
+
         return outputs
+
+    def get_timing_results(self):
+        """
+        Get the timing results for all methods
+        """
+        return self.timing_results
 
     @staticmethod
     def rna_process(adata):
+        if issparse(adata.X):
+            adata.X = adata.X.toarray()
+        else:
+            adata.X = adata.X
+            
         sc.pp.filter_cells(adata, min_genes=200)
         sc.pp.filter_genes(adata, min_cells=3)
         sc.pp.highly_variable_genes(adata, n_top_genes=2000, flavor='cell_ranger', subset=True)
@@ -76,6 +130,8 @@ class RunBaseline:
 
     @staticmethod
     def create_adata(features, batch, celltype):
+        if issparse(features):
+            features = features.toarray()
         adata = sc.AnnData(features)
         adata.obs['BATCH'] = batch
         adata.obs['celltype'] = celltype
@@ -87,20 +143,18 @@ def run_scvi(adata_scvi, mode):
         model = scvi.model.SCVI(adata_scvi, gene_likelihood='normal')
     else:
         model = scvi.model.SCVI(adata_scvi, gene_likelihood='zinb')
-    model.train(max_epochs=1)
+    model.train(max_epochs=100)
     latent = model.get_latent_representation()
     adata_scvi.obsm["X_scvi"] = latent
     return adata_scvi
 
 def run_imap(adata_imap, mode):
-    logger.info(adata_imap)
-    logger.info(adata_imap.obs.head())
-    logger.info(adata_imap.var.head())
-
     adata_imap = imap.stage1.data_preprocess(adata_imap, 'batch') if mode == 'rna' else adata_imap
+    if issparse(adata_imap.X):
+        raise ValueError("adata_imap.X is sparse")
     logger.info("after imap.stage1.data_preprocess")
-    EC, ec_data = imap.stage1.iMAP_fast(adata_imap, key="batch", n_epochs=10) 
-    output_results = imap.stage2.integrate_data(adata_imap, ec_data, inc=False, n_epochs=10)
+    EC, ec_data = imap.stage1.iMAP_fast(adata_imap, key="batch", n_epochs=200) 
+    output_results = imap.stage2.integrate_data(adata_imap, ec_data, inc=False, n_epochs=300)
     output_imap = sc.AnnData(output_results)
     output_imap.obs['celltype'] = adata_imap.obs['celltype'].values
     output_imap.obs['BATCH'] = adata_imap.obs['batch'].values
