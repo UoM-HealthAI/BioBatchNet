@@ -9,7 +9,11 @@ Baseline/notebook/
 Baseline/bash/
 Baseline/scib/
 
-CPC/
+CPC/results/
+CPC/CPC_main.py
+CPC/CPC_experiment/IMMU_raw.ipynb
+CPC/CPC_experiment/IMMU_scvi.ipynb
+
 Data/
 csf_log/
 Logs/
