@@ -69,7 +69,7 @@ class BaselineEvaluator:
         logger.info("Evaluating NN Methods across multiple runs...")
         aggregated_results = {}
         
-        for seed in tqdm(self.seed_list, desc="Evaluating NN Methods"):
+        for seed in self.seed_list:
             adata_dict = self.run_single_nn(seed)
             metrics_run = evaluate_nn(adata_dict, fraction=self.sampling_fraction, seed=self.sampling_seed)
             

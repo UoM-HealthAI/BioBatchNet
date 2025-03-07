@@ -33,25 +33,20 @@ class RunBaseline:
         """
         adata_base = RunBaseline.create_adata(self.features, self.batch, self.celltype)    
 
-        if issparse(self.raw_adata.X):
-            adata_imap= sc.AnnData(self.raw_adata.X.toarray())
-        else:
-            adata_imap= sc.AnnData(self.raw_adata.X)
-
-        adata_imap.obs['batch'] = self.batch.astype("category") 
-        adata_imap.obs['celltype'] = self.celltype.astype("category")
-
         # Run and time scVI
         start_time = time.time()
-        output_scvi = run_scvi(adata_base, mode=self.mode)
+        output_scvi = run_scvi(adata_base.copy(), mode=self.mode)
         end_time = time.time()
         scvi_time = end_time - start_time
         logger.info(f"scVI time: {scvi_time:.2f}s")
         self.timing_results['scVI'] = scvi_time
 
         # Run and time iMAP
+        adata_imap = adata_base.copy()
+        adata_imap.obs['batch'] = adata_imap.obs['BATCH']
+        
         start_time = time.time()
-        output_imap = run_imap(adata_imap, mode=self.mode)
+        output_imap = run_imap(adata_imap)
         end_time = time.time()
         imap_time = end_time - start_time
         logger.info(f"iMAP time: {imap_time:.2f}s")
@@ -148,11 +143,9 @@ def run_scvi(adata_scvi, mode):
     adata_scvi.obsm["X_scvi"] = latent
     return adata_scvi
 
-def run_imap(adata_imap, mode):
-    adata_imap = imap.stage1.data_preprocess(adata_imap, 'batch') if mode == 'rna' else adata_imap
+def run_imap(adata_imap):
     if issparse(adata_imap.X):
         raise ValueError("adata_imap.X is sparse")
-    logger.info("after imap.stage1.data_preprocess")
     EC, ec_data = imap.stage1.iMAP_fast(adata_imap, key="batch", n_epochs=200) 
     output_results = imap.stage2.integrate_data(adata_imap, ec_data, inc=False, n_epochs=300)
     output_imap = sc.AnnData(output_results)
