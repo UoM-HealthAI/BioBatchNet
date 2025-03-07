@@ -14,6 +14,8 @@ Data/
 csf_log/
 Logs/
 Results/
+bash/
+Evaluation/
 
 # Ignore Python virtual environments
 venv/
