@@ -5,8 +5,8 @@
 #$ -l v100 
 #$ -j y  # 结合标准输出和错误输出
 #$ -N run_immu_mouse
-#$ -o ~/scratch/code/haiping/BioBatchNet_project/csf_log/run_baseline/run_baseline_log_gene2.txt # output directory
-#$ -e ~/scratch/code/haiping/BioBatchNet_project/csf_log/run_baseline/run_baseline_error_gene2.txt    # error directory 
+#$ -o ~/scratch/code/haiping/BioBatchNet_project/csf_log/run_baseline/run_baseline_log_gene_immu_mouse.txt # output directory
+#$ -e ~/scratch/code/haiping/BioBatchNet_project/csf_log/run_baseline/run_baseline_error_gene_immu_mouse.txt    # error directory 
 
 module load libs/cuda
 

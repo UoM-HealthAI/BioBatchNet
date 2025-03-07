@@ -1,12 +1,12 @@
 #!/bin/bash --login
 #$ -cwd
 #$ -pe smp.pe 8  # 请求 8 核 CPU
-#$ -l h_vmem=32G  # 请求 32GB 内存
+#$ -l h_vmem=32G 
 #$ -l v100 
 #$ -j y  # 结合标准输出和错误输出
 #$ -N run_pan_mac
-#$ -o ~/scratch/code/haiping/BioBatchNet_project/csf_log/run_baseline/run_baseline_log_gene1.txt # output directory
-#$ -e ~/scratch/code/haiping/BioBatchNet_project/csf_log/run_baseline/run_baseline_error_gene1.txt    # error directory 
+#$ -o ~/scratch/code/haiping/BioBatchNet_project/csf_log/run_baseline/run_baseline_log_gene_pan_mac.txt # output directory
+#$ -e ~/scratch/code/haiping/BioBatchNet_project/csf_log/run_baseline/run_baseline_error_gene_pan_mac.txt    # error directory 
 
 module load libs/cuda
 
