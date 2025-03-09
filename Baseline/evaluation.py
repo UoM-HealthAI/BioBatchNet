@@ -4,13 +4,13 @@ from sklearn.metrics import adjusted_rand_score, normalized_mutual_info_score
 import numpy as np
 
 
-def subsample_data(adata, fraction, seed=42):
+def subsample_data(adata, fraction, seed):
     np.random.seed(seed)
     adata = adata.copy()
     sc.pp.subsample(adata, fraction=fraction, random_state=seed)
     return adata
 
-def evaluate_non_nn(adata_dict, fraction=0.01, seed=42):
+def evaluate_non_nn(adata_dict, fraction, seed):
     results = {}
     batch_key = 'BATCH'
     label_key = 'celltype'

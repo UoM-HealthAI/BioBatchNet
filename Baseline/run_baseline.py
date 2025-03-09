@@ -10,7 +10,7 @@ from logger_config import logger
 from pathlib import Path
 
 class BaselineEvaluator:
-    def __init__(self, adata, mode, sampling_fraction=0.5, sampling_seed=42, seed_list=[42, 52, 62]):
+    def __init__(self, adata, mode, sampling_fraction, sampling_seed, seed_list):
         """
         Initialize the BaselineEvaluator class.
         :param adata: Original AnnData object.
@@ -50,7 +50,7 @@ class BaselineEvaluator:
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
 
-        rb = RunBaseline(self.adata, mode=self.mode)
+        rb = RunBaseline(self.adata, mode=self.mode, seed=seed)
         adata_dict = rb.train_nn()  # Run neural network methods
         
         # Collect timing results
@@ -109,7 +109,7 @@ class BaselineEvaluator:
         for method in ['Harmony', 'BBKNN', 'Scanorama', 'Combat']:
             self.timing_results[method] = timing_results[method]
         
-        metrics_run = evaluate_non_nn(adata_dict, fraction=self.sampling_fraction, seed=42)  # Fixed seed for sampling
+        metrics_run = evaluate_non_nn(adata_dict, fraction=self.sampling_fraction, seed=self.sampling_seed)  # Fixed seed for sampling
         logger.info(f"Non-NN Methods Evaluation: {metrics_run}")
         return metrics_run
 
@@ -202,24 +202,24 @@ if __name__ == "__main__":
         #     "sampling_seed": 42,
         #     "seed_list": [42, 52, 62, 72, 82]
         # },
-        # 'pancreas':{
-        #     "mode": "rna",
-        #     "sampling_fraction": 1,
-        #     "sampling_seed": 42,
-        #     "seed_list": [42, 52, 62, 72, 82]
-        # },
-        # 'macaque':{
-        #     "mode": "rna",
-        #     "sampling_fraction": 1,
-        #     "sampling_seed": 42,
-        #     "seed_list": [42, 52, 62, 72, 82]
-        # },
-        'Immune_ALL_human':{
+        'pancreas':{
             "mode": "rna",
             "sampling_fraction": 1,
             "sampling_seed": 42,
             "seed_list": [42, 52, 62, 72, 82]
         },
+        'macaque':{
+            "mode": "rna",
+            "sampling_fraction": 1,
+            "sampling_seed": 42,
+            "seed_list": [42, 52, 62, 72, 82]
+        },
+        # 'Immune_ALL_human':{
+        #     "mode": "rna",
+        #     "sampling_fraction": 1,
+        #     "sampling_seed": 42,
+        #     "seed_list": [42, 52, 62, 72, 82]
+        # },
         'SubMouseBrain':{
             "mode": "rna",
             "sampling_fraction": 1,
@@ -253,4 +253,3 @@ if __name__ == "__main__":
              seed_list=seed_list)
         
         logger.info(f"{data_name}'s task finished.")
-        break

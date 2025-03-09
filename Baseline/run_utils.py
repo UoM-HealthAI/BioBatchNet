@@ -12,7 +12,7 @@ import time
 from logger_config import logger
 
 class RunBaseline:
-    def __init__(self, adata, mode):
+    def __init__(self, adata, mode, seed):
         """
         Run baseline methods for IMC and scRNA-seq data
         """
@@ -24,6 +24,7 @@ class RunBaseline:
         self.batch = pd.Categorical(self.process_adata.obs['BATCH'].values)
         self.celltype = pd.Categorical(self.process_adata.obs['celltype'].values)
         self.timing_results = {}
+        self.seed = seed
 
     def train_nn(self):
         """
@@ -46,7 +47,7 @@ class RunBaseline:
         adata_imap.obs['batch'] = adata_imap.obs['BATCH']
         
         start_time = time.time()
-        output_imap = run_imap(adata_imap)
+        output_imap = run_imap(adata_imap, self.seed)
         end_time = time.time()
         imap_time = end_time - start_time
         logger.info(f"iMAP time: {imap_time:.2f}s")
@@ -143,11 +144,11 @@ def run_scvi(adata_scvi, mode):
     adata_scvi.obsm["X_scvi"] = latent
     return adata_scvi
 
-def run_imap(adata_imap):
+def run_imap(adata_imap, seed):
     if issparse(adata_imap.X):
         raise ValueError("adata_imap.X is sparse")
-    EC, ec_data = imap.stage1.iMAP_fast(adata_imap, key="batch", n_epochs=200) 
-    output_results = imap.stage2.integrate_data(adata_imap, ec_data, inc=False, n_epochs=300)
+    EC, ec_data = imap.stage1.iMAP_fast(adata_imap, key="batch", n_epochs=200, seed=seed) 
+    output_results = imap.stage2.integrate_data(adata_imap, ec_data, inc=False, n_epochs=300, seed=seed)
     output_imap = sc.AnnData(output_results)
     output_imap.obs['celltype'] = adata_imap.obs['celltype'].values
     output_imap.obs['BATCH'] = adata_imap.obs['batch'].values
