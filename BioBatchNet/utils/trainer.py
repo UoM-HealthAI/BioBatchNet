@@ -8,31 +8,39 @@ from tqdm import tqdm
 import random
 import scanpy as sc
 import pandas as pd
-
-from Baseline.evaluation import evaluate_NN
+from .util import visualization
 from .loss import kl_divergence, orthogonal_loss, ZINBLoss, MMDLoss
 from .util import MetricTracker
+import json
+
+import sys
+import os
+
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../'))
+sys.path.append(project_root)
+from Baseline.evaluation import evaluate_nn
 
 class Trainer:
-    def __init__(self, config, model, optimizer, train_dataloader, eval_dataloader, scheduler, device):
+    def __init__(self, config, model, optimizer, train_dataloader, eval_dataloader, scheduler, device, seed):
         self.config = config
         self.model = model
         self.optimizer = optimizer
         self.train_dataloader = train_dataloader
         self.eval_dataloader = eval_dataloader
+        self.dataset_name = self.config['name']
 
         self.device = device
         self.scheduler = scheduler
-        self.train_seed_list = self.config['train_seed_list']
+        self.seed = seed
         self.eval_sampling_seed = self.config['eval_sampling_seed']
 
         self.cfg_trainer = self.config['trainer']
         self.epochs = self.cfg_trainer['epochs']
         self.save_period = self.cfg_trainer['save_period']
         self.if_imc = self.cfg_trainer['if_imc']
-        self.loss_weights = self.cfg_trainer['loss_weights'] 
+        self.loss_weights = self.config['loss_weights'][self.dataset_name] 
 
-        self.checkpoint_dir = self.config.save_dir
+        self.sampling_fraction = self.cfg_trainer['sampling_fraction'][self.dataset_name]
         self.logger = self.config.get_logger('trainer', self.config['trainer']['verbosity'])
  
         self.mse_recon = nn.MSELoss()
@@ -40,40 +48,68 @@ class Trainer:
         self.criterion_classification = nn.CrossEntropyLoss()
         self.mmd_loss = MMDLoss()
 
-        wandb.init(project=config['name'], config=config)
+        wandb.init(project=self.dataset_name, config=config)
 
         self.metric_tracker = MetricTracker(
-            'total_loss', 'recon_loss', 'kl_loss_1', 'kl_loss_2', 
-            'ortho_loss', 'batch_loss_z1', 'batch_loss_z2'
+            'total_loss', 'recon_loss', 'batch_loss_z1', 'batch_loss_z2',
+            'mmd_loss_1', 'kl_loss_1', 'kl_loss_2', 'ortho_loss', 
         )
 
+        # Base directory for saving all checkpoints and results
+        self.base_checkpoint_dir = self.config.save_dir
+        self.checkpoint_dir = None  # Will be updated for each seed training
+
     def train(self):
-        all_evaluation_results = []  # Used to store all evaluation results
-        seed_list = self.config['train_seed_list']  # Read the seed list from the config
+        """
+        Main training loop that handles multiple seeds.
+        For each seed:
+        1. Creates a dedicated directory
+        2. Runs training and evaluation
+        3. Saves checkpoints and results
+        4. umap visualization
+        Finally combines results from all seeds.
+        """
+        seed_list = self.config['train_seed_list']
 
-        for seed in seed_list:
-            # Set random seed
-            torch.manual_seed(seed)
-            np.random.seed(seed)
-            random.seed(seed)
+ 
+        # Create dedicated directory for this seed
+        self.checkpoint_dir = self.base_checkpoint_dir / f'seed_{self.seed}'
+        self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
+            
+        # Initialize new wandb run for this seed
+        if wandb.run is not None:
+            wandb.finish()
+        wandb.init(
+            project=self.config['name'],
+            config=self.config,
+            name=f"seed_{self.seed}",
+            group=str(self.checkpoint_dir)  
+        )
 
-            for epoch in tqdm(range(1, self.epochs + 1)):
-                self._train_epoch(epoch, mode='imc' if self.if_imc else 'rna')            
-                if epoch % self.save_period == 0:
-                    self._save_checkpoint(epoch)
+        # Training loop for current seed
+        for epoch in tqdm(range(1, self.epochs + 1)):
+            self._train_epoch(epoch, mode='imc' if self.if_imc else 'rna')  
+            
+            if epoch % 5 == 0:
+                evaluation_results = self._evaluate_epoch(epoch, sampling_fraction=0.1*self.sampling_fraction)
+                self.metric_tracker.log_to_wandb(evaluation_results)  
+                self.logger.info(f"epoch {epoch} evaluation results: {evaluation_results}")    
+                    
+            if epoch % self.save_period == 0:
+                self._save_checkpoint(epoch)
 
-            # Evaluate the model after training using the eval_sampling_seed
-            evaluation_results = self._evaluate_model()
-            all_evaluation_results.append(evaluation_results)  
+        # Evaluate model for current seed
+        evaluation_results = self._evaluate_epoch(epoch, sampling_fraction=self.sampling_fraction)
+        self.logger.info(f"Evaluation results after training with seed {self.seed}: {evaluation_results}")
+        
+        # Save evaluation results for current seed
+        results_df = pd.DataFrame(evaluation_results)
+        results_df.to_csv(self.checkpoint_dir / f'seed_{self.seed}_evaluation_result.csv', index=True)
 
-            self.logger.info(f"Evaluation results after training with seed {seed}: {evaluation_results}")
-
-        # Calculate the mean and variance of all evaluation results
-        final_results = self.calculate_final_results(all_evaluation_results)
-        self.logger.info(f"Final evaluation results: {final_results}")
-        final_results_df = pd.DataFrame(final_results)
-        final_results_df.to_csv(self.config.save_dir / 'final_results.csv', index=False)
-
+        wandb.finish()
+         
+        return results_df
+    
     def _train_epoch(self, epoch, mode):
         self.metric_tracker.reset()
         self.model.train()
@@ -82,7 +118,7 @@ class Trainer:
         total_correct_z2 = 0
         total_samples = 0
 
-        for data, batch_id, _ in self.dataloader:
+        for data, batch_id, _ in self.train_dataloader:
             data, batch_id = data.to(self.device), batch_id.to(self.device)
             self.optimizer.zero_grad()
 
@@ -118,7 +154,8 @@ class Trainer:
             loss = (self.loss_weights['recon_loss'] * recon_loss +
                     self.loss_weights['discriminator'] * batch_loss_z1 +
                     self.loss_weights['classifier'] * batch_loss_z2 +
-                    self.loss_weights['kl_loss_1'] * mmd_loss +
+                    self.loss_weights['mmd_loss_1'] * mmd_loss +
+                    self.loss_weights['kl_loss_1'] * kl_loss_1 +
                     self.loss_weights['kl_loss_2'] * kl_loss_2 +
                     self.loss_weights['ortho_loss'] * ortho_loss_value +
                     (self.loss_weights['kl_loss_size'] * kl_loss_size if mode == 'rna' else 0))
@@ -132,6 +169,7 @@ class Trainer:
                 'recon_loss': recon_loss.item(),
                 'batch_loss_z1': batch_loss_z1.item(),
                 'batch_loss_z2': batch_loss_z2.item(),
+                'mmd_loss_1': mmd_loss.item(),
                 'kl_loss_1': kl_loss_1.item(),
                 'kl_loss_2': kl_loss_2.item(),
                 'ortho_loss': ortho_loss_value.item(),
@@ -166,7 +204,7 @@ class Trainer:
             f"Z2 Accuracy = {z2_accuracy:.2f}"
         )
 
-    def _evaluate_model(self):
+    def _evaluate_epoch(self, epoch, sampling_fraction):
         with torch.no_grad():
             self.model.eval()
 
@@ -190,27 +228,32 @@ class Trainer:
 
             # adata_unintegrated
             adata_unintegrated = sc.AnnData(raw_data)
-            adata_unintegrated.obs['batch_id'] = batch_ids
-            adata_unintegrated.obs['cell_type'] = cell_types
+            adata_unintegrated.obs['BATCH'] = pd.Categorical(batch_ids)
+            adata_unintegrated.obs['celltype'] = pd.Categorical(cell_types)
 
             # adata_post (integrated data)
-            adata_post = sc.AnnData(raw_data)
-            adata_post.obs['batch_id'] = batch_ids
-            adata_post.obs['cell_type'] = cell_types
-            adata_post.obs['X_biobatchnet'] = integrated_data
+            adata_post = sc.AnnData(integrated_data)
+            adata_post.obs['BATCH'] = pd.Categorical(batch_ids)
+            adata_post.obs['celltype'] = pd.Categorical(cell_types)
+            adata_post.obsm['X_biobatchnet'] = integrated_data
+
+            # visualization
+            fig_save_dir = self.checkpoint_dir / 'fig'
+            fig_save_dir.mkdir(parents=True, exist_ok=True)  
+            # visualization(fig_save_dir, adata_post, 'X_biobatchnet', epoch)
+            self.logger.info(f"figure saved at {fig_save_dir}")
 
             adata_dict = {'Raw': adata_unintegrated, 'BioBatchNet': adata_post}
-            evaluation_results = evaluate_NN(adata_dict, seed=self.eval_sampling_seed)
+            evaluation_results = evaluate_nn(adata_dict, fraction=sampling_fraction, seed=self.eval_sampling_seed)
     
             return evaluation_results
     
     def _save_checkpoint(self, epoch):
         """
-        Saving checkpoints
-
-        :param epoch: current epoch number
-        :param log: logging information of the epoch
-        :param save_best: if True, rename the saved checkpoint to 'model_best.pth'
+        Save model checkpoint for current epoch in seed-specific directory.
+        
+        Args:
+            epoch (int): Current epoch number
         """
         arch = type(self.model).__name__
         state = {
@@ -219,11 +262,13 @@ class Trainer:
             'state_dict': self.model.state_dict(),
             'optimizer': self.optimizer.state_dict(),
             'config': self.config,
-            'loss_weights': self.loss_weights  # Save the loss weights
+            'loss_weights': self.loss_weights
         }
-        filename = str(self.checkpoint_dir / 'checkpoint-epoch{}.pth'.format(epoch))
+        
+        # Save checkpoint in seed-specific directory
+        filename = str(self.checkpoint_dir / f'checkpoint-epoch{epoch}.pth')
         torch.save(state, filename)
-        self.logger.info("Saving checkpoint: {} ...".format(filename))
+        self.logger.info(f"Saving checkpoint: {filename} ...")
 
     def _resume_checkpoint(self, resume_path):
         """
@@ -251,21 +296,31 @@ class Trainer:
             self.optimizer.load_state_dict(checkpoint['optimizer'])
 
         self.logger.info("Checkpoint loaded. Resume training from epoch {}".format(self.start_epoch))
-
-    def calculate_final_results(self, all_evaluation_results):
-        # Assuming all_evaluation_results is a list of dictionaries with the same keys
-        metrics = all_evaluation_results[0].keys()
-        final_results = {}
-
+    
+    @staticmethod
+    def calculate_final_results(all_evaluation_results):
+        """Calculate mean and variance for all metrics across different seeds.
+        
+        Args:
+            all_evaluation_results: List of evaluation results from different seeds
+            
+        Returns:
+            Dictionary containing mean and variance for each metric
+        """
+        method = list(all_evaluation_results[0].keys())[0]  
+        metrics = all_evaluation_results[0][method].keys()  
+        
+        final_results = {method: {}}
+        
         for metric in metrics:
-            # Collect all values for this metric
-            values = [result[metric] for result in all_evaluation_results]
-            # Calculate mean and variance
+            values = [result[method][metric] for result in all_evaluation_results]
             mean_value = np.mean(values)
-            variance_value = np.var(values)
-            # Store in final results
-            final_results[metric] = {'mean': mean_value, 'variance': variance_value}
-
+            std_value = np.std(values)
+            final_results[method][metric] = {
+                'mean': mean_value,
+                'std': std_value
+            }
+        
         return final_results
 
     

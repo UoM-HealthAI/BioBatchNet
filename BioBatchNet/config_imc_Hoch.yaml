@@ -1,0 +1,93 @@
+name: Hoch
+n_gpu: 1
+seed: null
+train_seed_list: null
+eval_sampling_seed: [42]
+
+arch:
+  type: IMCVAE
+  args:
+    in_sz: 41
+    bio_encoder_hidden_layers: [500, 2000, 2000]
+    batch_encoder_hidden_layers: [500]
+    latent_sz: 20
+    decoder_hidden_layers: [2000, 2000, 500]
+    out_sz: 41
+    batch_classifier_layers_power: [500, 2000, 2000]
+    batch_classifier_layers_weak: [128]
+    num_batch: 39
+    cell_classifier_layers: [64, 32]
+
+train_dataloader:
+  type: DataLoader
+  args:
+    batch_size: 128
+    shuffle: true
+    num_workers: 0
+
+eval_dataloader:
+  type: DataLoader
+  args:
+    batch_size: 128
+    shuffle: false
+    num_workers: 0
+
+optimizer:
+  type: Adam
+  args:
+    weight_decay: 0.00001
+    amsgrad: true
+    
+param_groups:
+  bio_encoder: 0.0001
+  batch_encoder: 0.0001
+  decoder: 0.0001
+  bio_classifier: 0.001
+  batch_classifier: 0.0001
+
+lr_scheduler:
+  type: StepLR
+  args:
+    step_size: 50
+    gamma: 0.1
+
+trainer:
+  epochs: 100
+  save_dir: "./saved/"
+  save_period: 20
+  verbosity: 2
+  monitor: "min val_loss"
+  early_stop: 20
+  if_imc: True
+  sampling_fraction: 
+    IMMUcan: 1
+    Damond: 0.2
+    Hoch: 0.1
+
+loss_weights:
+  IMMUcan:
+    recon_loss: 10
+    discriminator: 0.3
+    classifier: 1
+    mmd_loss_1: 0
+    kl_loss_1: 0.005
+    kl_loss_2: 0.1
+    ortho_loss: 0.01
+  Damond:
+    recon_loss: 10
+    discriminator: 0.3
+    classifier: 1
+    mmd_loss_1 : 0
+    kl_loss_1: 0.001
+    kl_loss_2: 0.1
+    ortho_loss: 0.01
+  Hoch:
+    recon_loss: 10
+    discriminator: 0.1
+    classifier: 1
+    mmd_loss_1 : 0.01
+    kl_loss_1: 0.0
+    kl_loss_2: 0.1
+    ortho_loss: 0.01
+
+

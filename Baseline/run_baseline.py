@@ -184,48 +184,48 @@ if __name__ == "__main__":
     logger.info("Script execution started.")
 
     data_config = {
-        # 'HochSchulz': {
-        #     "mode": "imc",
-        #     "sampling_fraction": 0.1,
-        #     "sampling_seed": 42,
-        #     "seed_list": [42, 52, 62, 72, 82]
-        # },
-        # "IMMUcan_batch": {
-        #     "mode": "imc",
+        'subDamond_full': {
+            "mode": "imc",
+            "sampling_fraction": 0.2,
+            "sampling_seed": 42,
+            "seed_list": [42, 52, 62, 72, 82]
+        },
+        'HochSchulz': {
+            "mode": "imc",
+            "sampling_fraction": 0.1,
+            "sampling_seed": 42,
+            "seed_list": [42, 52, 62, 72, 82]
+        },
+        "IMMUcan_batch": {
+            "mode": "imc",
+            "sampling_fraction": 1,
+            "sampling_seed": 42,
+            "seed_list": [42, 52, 62, 72, 82]
+        },
+        # 'pancreas':{
+        #     "mode": "rna",
         #     "sampling_fraction": 1,
         #     "sampling_seed": 42,
         #     "seed_list": [42, 52, 62, 72, 82]
         # },
-        # 'Damond_batch': {
-        #     "mode": "imc",
-        #     "sampling_fraction": 0.01,
+        # 'macaque':{
+        #     "mode": "rna",
+        #     "sampling_fraction": 1,
         #     "sampling_seed": 42,
         #     "seed_list": [42, 52, 62, 72, 82]
         # },
-        'pancreas':{
-            "mode": "rna",
-            "sampling_fraction": 1,
-            "sampling_seed": 42,
-            "seed_list": [42, 52, 62, 72, 82]
-        },
-        'macaque':{
-            "mode": "rna",
-            "sampling_fraction": 1,
-            "sampling_seed": 42,
-            "seed_list": [42, 52, 62, 72, 82]
-        },
         # 'Immune_ALL_human':{
         #     "mode": "rna",
         #     "sampling_fraction": 1,
         #     "sampling_seed": 42,
         #     "seed_list": [42, 52, 62, 72, 82]
         # },
-        'SubMouseBrain':{
-            "mode": "rna",
-            "sampling_fraction": 1,
-            "sampling_seed": 42,
-            "seed_list": [42, 52, 62, 72, 82]
-        }
+        # 'SubMouseBrain':{
+        #     "mode": "rna",
+        #     "sampling_fraction": 1,
+        #     "sampling_seed": 42,
+        #     "seed_list": [42, 52, 62, 72, 82]
+        # }
     }
 
     for data_name, config in data_config.items():

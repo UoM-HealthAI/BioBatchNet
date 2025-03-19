@@ -5,6 +5,10 @@ import torch
 from pathlib import Path
 from itertools import repeat
 from collections import OrderedDict
+import scanpy as sc
+import matplotlib.pyplot as plt
+import numpy as np
+import random
 
 def read_json(fname):
     fname = Path(fname)
@@ -39,7 +43,7 @@ def prepare_device(n_gpu_use):
         print(f"Warning: The number of GPU\'s configured to use is {n_gpu_use}, but only {n_gpu} are "
               "available on this machine.")
         n_gpu_use = n_gpu
-    device = torch.device('cuda:0' if n_gpu_use > 0 else 'cpu')
+    device = torch.device('cuda' if n_gpu_use > 0 else 'cpu')
     list_ids = list(range(n_gpu_use))
     return device, list_ids
 
@@ -93,3 +97,18 @@ def log_gradients_to_wandb(model):
         'max_grad_norm': max_grad_norm,
         'min_grad_norm': min_grad_norm,
     })
+
+def visualization(save_dir, adata, emb, epoch):
+    sc.pp.subsample(adata, fraction=0.1)
+    sc.pp.neighbors(adata, use_rep=emb)
+    sc.tl.umap(adata)
+    sc.pl.umap(adata, color=['BATCH', 'celltype'], frameon=False)
+    plt.savefig(f'{save_dir}/{emb}_{epoch}_umap.png')
+
+def set_random_seed(seed):
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    np.random.seed(seed)
+    random.seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False

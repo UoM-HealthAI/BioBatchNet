@@ -42,3 +42,4 @@ def sampling(adata_dict, fraction=0.3):
         sc.pp.subsample(adata, fraction=fraction)
         sampling_adata_dict[key] =  adata
     return sampling_adata_dict
+

@@ -7,32 +7,31 @@ from pathlib import Path
 class IMCDataset(Dataset):
     BASE_DIR = Path(__file__).resolve().parent.parent.parent
     dataset_configs = {
+        # 'Damond': {
+        #     'feature_cols': (0, 38),
+        #     'batch_col': 40,
+        #     'cell_type_col': 38,
+        #     'datadir': BASE_DIR / 'Data/IMC/csv_format/Damond_2019_Pancreas.csv'
+        # },   
         'Damond': {
-            'feature_cols': (0, 38),
-            'batch_col': 40,
-            'cell_type_col': 38,
-            'datadir': BASE_DIR / 'Data/IMC/Damond_2019_Pancreas.csv'
-        },
-        
-        'Damond_full': {
             'feature_cols': (0, 38),
             'batch_col': 38,
             'cell_type_col': 39,
-            'datadir': BASE_DIR / 'Data/IMC/Damond_2019_Pancreas_IMC_subset_cleaned.csv'
+            'datadir': BASE_DIR / 'Data/IMC/csv_format/damond_full_data.csv'
         },
 
         'Hoch': {
             'feature_cols': (0, 41),
             'batch_col': 42,
             'cell_type_col': 41,
-            'datadir': BASE_DIR / 'Data/IMC/HochSchulz.csv'
+            'datadir': BASE_DIR / 'Data/IMC/csv_format/HochSchulz.csv'
         },
 
         'IMMUcan': {
             'feature_cols': (0, 40),
             'batch_col': 41,
             'cell_type_col': 40,
-            'datadir': BASE_DIR / 'Data/IMC/IMMUcan_batch.csv'
+            'datadir': BASE_DIR / 'Data/IMC/csv_format/IMMUcan_batch.csv'
         },
     }
 
@@ -93,9 +92,37 @@ class CLDataset(Dataset):
         return sample_i, sample_j
 
 class GeneDataset(Dataset):
+    BASE_DIR = Path(__file__).resolve().parent.parent.parent
+
+    data_config = {
+        'macaque': {
+            'data_dir': BASE_DIR / 'Data/Gene_data/csv_format/macaque_raw.csv',
+            'feature_cols': (0, 2000),
+            'cell_type_col': 'celltype',
+            'batch_col': 'BATCH'
+        },
+        'pancreas': {
+            'data_dir': BASE_DIR / 'Data/Gene_data/csv_format/pancreas_raw.csv',
+            'feature_cols': (0, 2000),
+            'cell_type_col': 'celltype',
+            'batch_col': 'BATCH'
+        },
+        'human': {
+            'data_dir': BASE_DIR / 'Data/Gene_data/csv_format/human_raw.csv',
+            'feature_cols': (0, 2000),
+            'cell_type_col': 'celltype',
+            'batch_col': 'BATCH'
+        },
+        'mouse': {
+            'data_dir': BASE_DIR / 'Data/Gene_data/csv_format/mouse_raw.csv',
+            'feature_cols': (0, 2000),
+            'cell_type_col': 'celltype',
+            'batch_col': 'BATCH'
+        }
+    }
+
     def __init__(self, data_dir):
         super().__init__()
-
         self.adata = pd.read_csv(data_dir)
         self.data = self.adata.iloc[:, 0:2000].values
         

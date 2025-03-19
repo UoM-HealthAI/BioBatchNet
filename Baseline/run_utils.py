@@ -147,8 +147,8 @@ def run_scvi(adata_scvi, mode):
 def run_imap(adata_imap, seed):
     if issparse(adata_imap.X):
         raise ValueError("adata_imap.X is sparse")
-    EC, ec_data = imap.stage1.iMAP_fast(adata_imap, key="batch", n_epochs=200, seed=seed) 
-    output_results = imap.stage2.integrate_data(adata_imap, ec_data, inc=False, n_epochs=300, seed=seed)
+    EC, ec_data = imap.stage1.iMAP_fast(adata_imap, key="batch", n_epochs=150, seed=seed) 
+    output_results = imap.stage2.integrate_data(adata_imap, ec_data, inc=False, n_epochs=150, seed=seed)
     output_imap = sc.AnnData(output_results)
     output_imap.obs['celltype'] = adata_imap.obs['celltype'].values
     output_imap.obs['BATCH'] = adata_imap.obs['batch'].values

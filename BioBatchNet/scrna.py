@@ -13,15 +13,7 @@ from utils.trainer import Trainer
 
 def main(config):
     logger = config.get_logger('train')
-
-    SEED = config['seed']
-    logger.info(f"random seed is {SEED}")
-    torch.manual_seed(SEED)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-    np.random.seed(SEED)
-    random.seed(SEED)
-
+    
     # prepare data
     dataset_name = config['data_loader']['type'] 
     data_dir = "../Data/Gene_data/csv_format/macaque_raw.csv"

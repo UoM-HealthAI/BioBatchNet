@@ -23,8 +23,8 @@ class ConfigParser:
         self.resume = resume
 
         # random seed
-        if 'seed' not in self._config or self._config['seed'] is None:
-            self._config['seed'] = random.randint(0, 2**32 - 1) 
+        if 'train_seed_list' not in self._config or self._config['train_seed_list'] is None:
+            self._config['train_seed_list'] = random.sample(range(1, 10000), 5)
 
         # set save_dir where trained model and log will be saved.
         save_dir = Path(self.config['trainer']['save_dir'])
@@ -133,7 +133,12 @@ class ConfigParser:
         logger = logging.getLogger(name)
         logger.setLevel(self.log_levels[verbosity])
         return logger
-
+    
+    def get(self, key, default=None):
+        return self._config.get(key, default)
+    
+    def __setitem__(self, key, value):
+        self._config[key] = value
     # setting read-only attributes
     @property
     def config(self):
