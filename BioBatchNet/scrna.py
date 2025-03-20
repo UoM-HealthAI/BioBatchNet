@@ -1,58 +1,55 @@
 import argparse
 import collections
 import torch
-import random
-import numpy as np
-from torch.utils.data import DataLoader
+import pandas as pd
 
 from parse_config import ConfigParser
 import models.model as model
 from utils.dataset import GeneDataset
-from utils.util import prepare_device
+from utils.util import prepare_device, set_random_seed
 from utils.trainer import Trainer
 
 def main(config):
     logger = config.get_logger('train')
     
     # prepare data
-    dataset_name = config['data_loader']['type'] 
-    data_dir = "../Data/Gene_data/csv_format/macaque_raw.csv"
-    train_dataset = GeneDataset(data_dir)
-    train_dataloader = DataLoader(train_dataset, shuffle=True, batch_size=256)
+    dataset_name = config['name']       
+    dataset = GeneDataset(dataset_name)
+    train_dataloader = config.init_obj('train_dataloader', torch.utils.data , dataset)
+    eval_dataloader = config.init_obj('eval_dataloader', torch.utils.data , dataset)
+    device, _ = prepare_device(config['n_gpu'])
 
-    # build model
-    BioBatchNet = config.init_obj('arch', model)
-    logger.info(BioBatchNet)
+    all_evaluation_results = []
+    for seed in config['train_seed_list']:
+        set_random_seed(seed)
+        BioBatchNet = config.init_obj('arch', model)
+        logger.info(BioBatchNet)
+        BioBatchNet = BioBatchNet.to(device)
 
-    # prepare device
-    device, device_ids = prepare_device(config['n_gpu'])
-    BioBatchNet = BioBatchNet.to(device)
-    if len(device_ids) > 1:
-        BioBatchNet = torch.nn.DataParallel(BioBatchNet, device_ids=device_ids)
+        # Initialize optimizer and lr_scheduler
+        trainable_params = filter(lambda p: p.requires_grad, BioBatchNet.parameters())
+        optimizer = config.init_obj('optimizer', torch.optim, trainable_params)
+        lr_scheduler = config.init_obj('lr_scheduler', torch.optim.lr_scheduler, optimizer)
 
-    # Initialize optimizer and lr_scheduler
-    param_groups = config['optimizer']['args']['param_groups']
-    optimizer = config.init_obj('optimizer', torch.optim, [
-        {'params': BioBatchNet.bio_encoder.parameters(), 'lr': param_groups['bio_encoder']},
-        {'params': BioBatchNet.batch_encoder.parameters(), 'lr': param_groups['batch_encoder']},
-        {'params': BioBatchNet.decoder.parameters(), 'lr': param_groups['decoder']},
-        {'params': BioBatchNet.mean_decoder.parameters(), 'lr': param_groups['mean_decoder']},
-        {'params': BioBatchNet.dispersion_decoder.parameters(), 'lr': param_groups['dispersion_decoder']},
-        {'params': BioBatchNet.dropout_decoder.parameters(), 'lr': param_groups['dropout_decoder']},
-        {'params': BioBatchNet.bio_classifier.parameters(), 'lr': param_groups['bio_classifier']},
-        {'params': BioBatchNet.batch_classifier.parameters(), 'lr': param_groups['batch_classifier']}
-    ])
-    lr_scheduler = config.init_obj('lr_scheduler', torch.optim.lr_scheduler, optimizer)
-
-    # trainer
-    trainer = Trainer(config, 
-                      model = BioBatchNet, 
-                      optimizer = optimizer, 
-                      dataloader = train_dataloader,
-                      scheduler = lr_scheduler, 
-                      device = device)
+        # trainer
+        trainer = Trainer(config, 
+                        model = BioBatchNet, 
+                        optimizer = optimizer, 
+                        train_dataloader = train_dataloader,
+                        eval_dataloader = eval_dataloader,
+                        scheduler = lr_scheduler, 
+                        device = device,
+                        seed = seed)
+        
+        logger.info("------------------training begin------------------")
+        result_df = trainer.train()
+        all_evaluation_results.append(result_df)
     
-    trainer.train()
+    base_checkpoint_dir = config.save_dir
+    final_results = trainer.calculate_final_results(all_evaluation_results)
+    final_results_df = pd.DataFrame(final_results)
+    final_results_df.to_csv(base_checkpoint_dir / 'final_results.csv', index=True)
+    logger.info("All experiments completed.")
 
 
 if __name__ == '__main__':

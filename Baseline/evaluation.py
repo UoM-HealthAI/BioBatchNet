@@ -103,11 +103,9 @@ def compute_metrics(adata_raw, adata, batch_key, label_key, type, embed):
     ari = scib.me.ari(adata, cluster_key="cluster", label_key="celltype")
     nmi = scib.me.nmi(adata, cluster_key="cluster", label_key="celltype")
 
-    # Calculate mean biological score (first four metrics)
     batch_score = (ilisi + graph_connectivity + asw_batch + pcr) / 4
-
-    # Calculate mean batch effect score (last three metrics)
     bio_score = (asw_cell + ari + nmi) / 3
+    total_score = (batch_score + bio_score) / 2
 
     return {
         'iLISI': ilisi,
@@ -119,6 +117,7 @@ def compute_metrics(adata_raw, adata, batch_key, label_key, type, embed):
         'ARI': ari,
         'NMI': nmi,
         'BioScore': bio_score,
+        'TotalScore': total_score
     }
 
 

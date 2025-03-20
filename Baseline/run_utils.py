@@ -12,7 +12,7 @@ import time
 from logger_config import logger
 
 class RunBaseline:
-    def __init__(self, adata, mode, seed):
+    def __init__(self, adata, mode, seed=None):
         """
         Run baseline methods for IMC and scRNA-seq data
         """

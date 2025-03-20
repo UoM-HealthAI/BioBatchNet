@@ -26,7 +26,6 @@ def main(config):
     all_evaluation_results = []
     for seed in config['train_seed_list']:
         set_random_seed(seed)
-        # build model
         BioBatchNet = config.init_obj('arch', model)
         logger.info(BioBatchNet)
         BioBatchNet = BioBatchNet.to(device)

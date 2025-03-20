@@ -240,7 +240,7 @@ class Trainer:
             # visualization
             fig_save_dir = self.checkpoint_dir / 'fig'
             fig_save_dir.mkdir(parents=True, exist_ok=True)  
-            # visualization(fig_save_dir, adata_post, 'X_biobatchnet', epoch)
+            visualization(fig_save_dir, adata_post, 'X_biobatchnet', epoch)
             self.logger.info(f"figure saved at {fig_save_dir}")
 
             adata_dict = {'Raw': adata_unintegrated, 'BioBatchNet': adata_post}

@@ -3,16 +3,12 @@ import numpy as np
 import pandas as pd
 import torch
 from pathlib import Path
+import scanpy as sc
+from scipy.sparse import issparse
 
 class IMCDataset(Dataset):
     BASE_DIR = Path(__file__).resolve().parent.parent.parent
     dataset_configs = {
-        # 'Damond': {
-        #     'feature_cols': (0, 38),
-        #     'batch_col': 40,
-        #     'cell_type_col': 38,
-        #     'datadir': BASE_DIR / 'Data/IMC/csv_format/Damond_2019_Pancreas.csv'
-        # },   
         'Damond': {
             'feature_cols': (0, 38),
             'batch_col': 38,
@@ -93,50 +89,47 @@ class CLDataset(Dataset):
 
 class GeneDataset(Dataset):
     BASE_DIR = Path(__file__).resolve().parent.parent.parent
-
     data_config = {
         'macaque': {
-            'data_dir': BASE_DIR / 'Data/Gene_data/csv_format/macaque_raw.csv',
-            'feature_cols': (0, 2000),
-            'cell_type_col': 'celltype',
-            'batch_col': 'BATCH'
+            'data_dir': BASE_DIR / 'Data/scRNA-seq/macaque.h5ad',
         },
-        'pancreas': {
-            'data_dir': BASE_DIR / 'Data/Gene_data/csv_format/pancreas_raw.csv',
-            'feature_cols': (0, 2000),
-            'cell_type_col': 'celltype',
-            'batch_col': 'BATCH'
-        },
-        'human': {
-            'data_dir': BASE_DIR / 'Data/Gene_data/csv_format/human_raw.csv',
-            'feature_cols': (0, 2000),
-            'cell_type_col': 'celltype',
-            'batch_col': 'BATCH'
-        },
-        'mouse': {
-            'data_dir': BASE_DIR / 'Data/Gene_data/csv_format/mouse_raw.csv',
-            'feature_cols': (0, 2000),
-            'cell_type_col': 'celltype',
-            'batch_col': 'BATCH'
-        }
+
     }
 
-    def __init__(self, data_dir):
+    def __init__(self, dataset_name):
         super().__init__()
-        self.adata = pd.read_csv(data_dir)
-        self.data = self.adata.iloc[:, 0:2000].values
-        
-        self.cell_type = pd.Categorical(self.adata['cell_type']).codes
-        self.batch = pd.Categorical(self.adata['batch']).codes
+        adata_dir = self.data_config[dataset_name]['data_dir']
+        adata = sc.read_h5ad(adata_dir)
+        adata = GeneDataset.rna_process(adata)
+
+        self.data = adata.X
+        self.cell_type = pd.Categorical(adata.obs['celltype']).codes
+        self.batch = pd.Categorical(adata.obs['BATCH']).codes
 
     def __len__(self):
-        return self.adata.shape[0]
+        return self.data.shape[0]
 
     def __getitem__(self, index):
         data = torch.tensor(self.data[index], dtype=torch.float32)
         cell_type = torch.tensor(self.cell_type[index], dtype=torch.long)
         batch = torch.tensor(self.batch[index], dtype=torch.long)
         return data, batch, cell_type
+
+    @staticmethod
+    def rna_process(adata):
+        if issparse(adata.X):
+            adata.X = adata.X.toarray()
+        else:
+            adata.X = adata.X
+            
+        sc.pp.filter_cells(adata, min_genes=200)
+        sc.pp.filter_genes(adata, min_cells=3)
+        sc.pp.highly_variable_genes(adata, n_top_genes=2000, flavor='cell_ranger', subset=True)
+        sc.pp.normalize_total(adata, target_sum=1e4)
+        sc.pp.log1p(adata)
+        processed_adata = adata[:, adata.var['highly_variable']]
+        return processed_adata
+        
 
 
     

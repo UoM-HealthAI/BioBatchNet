@@ -20,6 +20,8 @@ Logs/
 Results/
 bash/
 Evaluation/
+saved/
+wandb/
 
 # Ignore Python virtual environments
 venv/
