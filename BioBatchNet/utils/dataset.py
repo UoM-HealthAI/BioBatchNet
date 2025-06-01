@@ -93,6 +93,12 @@ class GeneDataset(Dataset):
         'macaque': {
             'data_dir': BASE_DIR / 'Data/scRNA-seq/macaque.h5ad',
         },
+        'mousebrain': {
+            'data_dir': BASE_DIR / 'Data/scRNA-seq/mousebrain.h5ad',
+        },
+        'pancreas':{
+            'data_dir': BASE_DIR / 'Data/scRNA-seq/pancreas.h5ad',
+        }
 
     }
 
@@ -124,7 +130,7 @@ class GeneDataset(Dataset):
             
         sc.pp.filter_cells(adata, min_genes=200)
         sc.pp.filter_genes(adata, min_cells=3)
-        sc.pp.highly_variable_genes(adata, n_top_genes=2000, flavor='cell_ranger', subset=True)
+        sc.pp.highly_variable_genes(adata, n_top_genes=2000, flavor='seurat_v3', subset=True)
         sc.pp.normalize_total(adata, target_sum=1e4)
         sc.pp.log1p(adata)
         processed_adata = adata[:, adata.var['highly_variable']]

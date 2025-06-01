@@ -24,6 +24,7 @@ def main(config):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     all_evaluation_results = []
+
     for seed in config['train_seed_list']:
         set_random_seed(seed)
         BioBatchNet = config.init_obj('arch', model)
@@ -69,8 +70,6 @@ if __name__ == '__main__':
                       help='config file path')
     args.add_argument('-r', '--resume', default=None, type=str,
                       help='path to latest checkpoint (default: None)')
-    args.add_argument('-d', '--device', default=None, type=str,
-                      help='indices of GPUs to enable (default: all)')
     
     CustomArgs = collections.namedtuple('CustomArgs', 'flags type target')
     options = [

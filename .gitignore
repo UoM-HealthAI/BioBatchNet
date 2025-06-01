@@ -22,6 +22,8 @@ bash/
 Evaluation/
 saved/
 wandb/
+BaselineResults/
+
 
 # Ignore Python virtual environments
 venv/
