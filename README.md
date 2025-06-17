@@ -50,7 +50,7 @@ python IMC.py -c config/IMC/config_imc_IMMUcan.yaml
 ```
 
 **For scRNA-seq Data**
-To process **scRNA-seq** data, modify the dataset, network layers, and other parameters in `config_gene.yaml`, then run the following command to train BioBatchNet:
+To process **scRNA-seq** data, modify the dataset, run the following command to train BioBatchNet:
 ```bash
 python Gene.py -c config/IMC/config_rna_macaque.yaml
 ```
