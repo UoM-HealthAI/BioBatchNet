@@ -1,0 +1,16 @@
+_base_: config_base_rna.yaml
+name: mousebrain
+
+arch:
+  args:
+    num_batch: 2
+
+loss_weights:
+  recon_loss: 2
+  discriminator: 0.3
+  classifier: 0.01
+  mmd_loss_1: 0
+  kl_loss_1: 0.0005
+  kl_loss_2: 0.010
+  ortho_loss: 0.001
+  kl_loss_size: 0.01

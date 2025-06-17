@@ -5,13 +5,11 @@ import wandb
 from pathlib import Path
 import torch.nn.functional as F
 from tqdm import tqdm
-import random
 import scanpy as sc
 import pandas as pd
 from .util import visualization
 from .loss import kl_divergence, orthogonal_loss, ZINBLoss, MMDLoss
 from .util import MetricTracker
-import json
 
 import sys
 import os
@@ -19,6 +17,29 @@ import os
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../'))
 sys.path.append(project_root)
 from Baseline.evaluation import evaluate_nn
+
+
+class EarlyStopping:
+    def __init__(self, patience=10, delta_ratio=0.000):
+        self.patience = patience
+        self.delta_ratio = delta_ratio
+        self.best_loss = 1e10
+        self.counter = 0
+        self.early_stop = False
+        self.best_epoch = 0  
+
+    def step(self, current_loss, epoch):
+        delta = self.best_loss * self.delta_ratio
+        if current_loss < self.best_loss - delta:
+            self.best_loss = current_loss
+            self.best_epoch = epoch
+            self.counter = 0
+            return True  
+        else:
+            self.counter += 1
+            if self.counter >= self.patience:
+                self.early_stop = True
+            return False  
 
 class Trainer:
     def __init__(self, config, model, optimizer, train_dataloader, eval_dataloader, scheduler, device, seed):
@@ -38,7 +59,8 @@ class Trainer:
         self.epochs = self.cfg_trainer['epochs']
         self.save_period = self.cfg_trainer['save_period']
         self.if_imc = self.cfg_trainer['if_imc']
-        self.loss_weights = self.config['loss_weights'][self.dataset_name] 
+        self.loss_weights = self.config['loss_weights']
+        self.early_stopping = EarlyStopping(patience=self.cfg_trainer['early_stop'])
 
         self.sampling_fraction = self.cfg_trainer['sampling_fraction'][self.dataset_name]
         self.logger = self.config.get_logger('trainer', self.config['trainer']['verbosity'])
@@ -62,16 +84,13 @@ class Trainer:
     def train(self):
         """
         Main training loop that handles multiple seeds.
-        For each seed:
-        1. Creates a dedicated directory
-        2. Runs training and evaluation
-        3. Saves checkpoints and results
-        4. umap visualization
-        Finally combines results from all seeds.
+            For each seed:
+            1. Creates a dedicated directory
+            2. Runs training and evaluation
+            3. Saves checkpoints and results
+            4. umap visualization
+            Finally combines results from all seeds.
         """
-        seed_list = self.config['train_seed_list']
-
- 
         # Create dedicated directory for this seed
         self.checkpoint_dir = self.base_checkpoint_dir / f'seed_{self.seed}'
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
@@ -88,17 +107,27 @@ class Trainer:
 
         # Training loop for current seed
         for epoch in tqdm(range(1, self.epochs + 1)):
-            self._train_epoch(epoch, mode='imc' if self.if_imc else 'rna')  
+            current_train_loss = self._train_epoch(epoch, mode='imc' if self.if_imc else 'rna')  
+            improved = self.early_stopping.step(current_train_loss, epoch)
             
-            if epoch % 5 == 0:
-                evaluation_results = self._evaluate_epoch(epoch, sampling_fraction=0.1*self.sampling_fraction)
-                self.metric_tracker.log_to_wandb(evaluation_results)  
-                self.logger.info(f"epoch {epoch} evaluation results: {evaluation_results}")    
+            if improved:
+                self._save_best_checkpoint(epoch)
+                self.logger.info(f"New best loss: {self.early_stopping.best_loss:.4f} at epoch {epoch}")
+
+            if self.early_stopping.early_stop:
+                self.logger.info(f"Early stopping triggered at epoch {epoch}.")
+                break
+
+            # if epoch % 5 == 0:
+            #     evaluation_results = self._evaluate_epoch(epoch, sampling_fraction=0.1*self.sampling_fraction)
+            #     self.metric_tracker.log_to_wandb(evaluation_results)  
+            #     self.logger.info(f"epoch {epoch} evaluation results: {evaluation_results}")    
                     
             if epoch % self.save_period == 0:
                 self._save_checkpoint(epoch)
 
-        # Evaluate model for current seed
+        # Load best model for final evaluation
+        self._load_best_model()
         evaluation_results = self._evaluate_epoch(epoch, sampling_fraction=self.sampling_fraction)
         self.logger.info(f"Evaluation results after training with seed {self.seed}: {evaluation_results}")
         
@@ -108,7 +137,7 @@ class Trainer:
 
         wandb.finish()
          
-        return results_df
+        return evaluation_results
     
     def _train_epoch(self, epoch, mode):
         self.metric_tracker.reset()
@@ -204,6 +233,8 @@ class Trainer:
             f"Z2 Accuracy = {z2_accuracy:.2f}"
         )
 
+        return self.metric_tracker.avg('total_loss')
+
     def _evaluate_epoch(self, epoch, sampling_fraction):
         with torch.no_grad():
             self.model.eval()
@@ -296,7 +327,40 @@ class Trainer:
             self.optimizer.load_state_dict(checkpoint['optimizer'])
 
         self.logger.info("Checkpoint loaded. Resume training from epoch {}".format(self.start_epoch))
-    
+
+    def _save_best_checkpoint(self, epoch):
+        """
+        Save the best model checkpoint.
+        """
+        arch = type(self.model).__name__
+        state = {
+            'arch': arch,
+            'epoch': epoch,
+            'state_dict': self.model.state_dict(),
+            'optimizer': self.optimizer.state_dict(),
+            'config': self.config,
+            'loss_weights': self.loss_weights,
+            'best_loss': self.early_stopping.best_loss,
+            'best_epoch': self.early_stopping.best_epoch
+        }
+        
+        best_filename = str(self.checkpoint_dir / 'best_model.pth')
+        torch.save(state, best_filename)
+        self.logger.info(f"Saved best model: {best_filename}")
+
+    def _load_best_model(self):
+        """
+        Load the best model for final evaluation.
+        """
+        best_path = self.checkpoint_dir / 'best_model.pth'
+        if best_path.exists():
+            self.logger.info(f"Loading best model from {best_path}")
+            checkpoint = torch.load(best_path)
+            self.model.load_state_dict(checkpoint['state_dict'])
+            self.logger.info(f"Loaded best model from epoch {checkpoint['best_epoch']} with loss: {checkpoint['best_loss']:.4f}")
+        else:
+            self.logger.warning("Best model not found, using current model for evaluation")
+
     @staticmethod
     def calculate_final_results(all_evaluation_results):
         """Calculate mean and variance for all metrics across different seeds.

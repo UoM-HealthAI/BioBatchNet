@@ -1,0 +1,22 @@
+_base_: config_base_imc.yaml
+name: Hoch
+
+arch:
+  args:
+    in_sz: 41
+    out_sz: 41
+    num_batch: 39
+
+trainer:
+  epochs: 100
+
+loss_weights:
+  recon_loss: 10
+  discriminator: 0.1
+  classifier: 1
+  mmd_loss_1: 0.01
+  kl_loss_1: 0.0
+  kl_loss_2: 0.1
+  ortho_loss: 0.01
+
+

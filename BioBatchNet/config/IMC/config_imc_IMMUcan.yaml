@@ -1,0 +1,20 @@
+_base_: config_base_imc.yaml
+name: IMMUcan
+
+arch:
+  args:
+    in_sz: 40
+    out_sz: 40
+    num_batch: 4
+
+
+loss_weights:
+  recon_loss: 10
+  discriminator: 0.3
+  classifier: 1
+  mmd_loss_1: 0
+  kl_loss_1: 0.005
+  kl_loss_2: 0.1
+  ortho_loss: 0.01
+
+

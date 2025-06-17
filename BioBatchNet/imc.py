@@ -20,26 +20,18 @@ def main(config):
     dataset = IMCDataset(dataset_name)
     train_dataloader = config.init_obj('train_dataloader', torch.utils.data , dataset)
     eval_dataloader = config.init_obj('eval_dataloader', torch.utils.data , dataset)
-
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    device = 'cuda' 
 
     all_evaluation_results = []
-
     for seed in config['train_seed_list']:
         set_random_seed(seed)
         BioBatchNet = config.init_obj('arch', model)
         logger.info(BioBatchNet)
         BioBatchNet = BioBatchNet.to(device)
 
-        # optimizer
-        param_groups = config['param_groups']
-        optimizer = config.init_obj('optimizer', torch.optim, [
-            {'params': BioBatchNet.bio_encoder.parameters(), 'lr': param_groups['bio_encoder']},
-            {'params': BioBatchNet.batch_encoder.parameters(), 'lr': param_groups['batch_encoder']},
-            {'params': BioBatchNet.decoder.parameters(), 'lr': param_groups['decoder']},
-            {'params': BioBatchNet.bio_classifier.parameters(), 'lr': param_groups['bio_classifier']},
-            {'params': BioBatchNet.batch_classifier.parameters(), 'lr': param_groups['batch_classifier']}
-        ])
+        # optimizer - simplified with unified learning rate
+        trainable_params = filter(lambda p: p.requires_grad, BioBatchNet.parameters())
+        optimizer = config.init_obj('optimizer', torch.optim, trainable_params)
         lr_scheduler = config.init_obj('lr_scheduler', torch.optim.lr_scheduler, optimizer)
 
         # trainer

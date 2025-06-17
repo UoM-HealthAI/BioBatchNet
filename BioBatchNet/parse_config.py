@@ -5,8 +5,24 @@ from pathlib import Path
 from functools import reduce, partial
 from operator import getitem
 from datetime import datetime
-from logger import setup_logging
 from utils.util import read_yaml, write_yaml
+
+def setup_logging(save_dir, log_config='logger/logger_config.json', default_level=logging.INFO):
+    """
+    Setup logging configuration
+    """
+    log_config = Path(log_config)
+    if log_config.is_file():
+        config = read_yaml(log_config)
+        # modify logging paths based on run config
+        for _, handler in config['handlers'].items():
+            if 'filename' in handler:
+                handler['filename'] = str(save_dir / handler['filename'])
+
+        logging.config.dictConfig(config)
+    else:
+        print("Warning: logging configuration file is not found in {}.".format(log_config))
+        logging.basicConfig(level=default_level)
 
 class ConfigParser:
     def __init__(self, config, resume=None, modification=None, run_id=None):
@@ -66,8 +82,8 @@ class ConfigParser:
             if not isinstance(args, tuple):
                 args = args.parse_args()
 
-        if args.device is not None:
-            os.environ["CUDA_VISIBLE_DEVICES"] = args.device
+        # if args.device is not None:
+        #     os.environ["CUDA_VISIBLE_DEVICES"] = args.device
 
         if args.resume is not None:
             resume = Path(args.resume)
@@ -78,6 +94,14 @@ class ConfigParser:
             cfg_fname = Path(args.config)
 
         config = read_yaml(cfg_fname)
+        
+        # inherit base config
+        if '_base_' in config:
+            base_config_path = Path(cfg_fname).parent / config['_base_']
+            base_config = read_yaml(base_config_path)
+            # deep merge config
+            config = _deep_merge(base_config, config)
+            del config['_base_']  # remove inherit mark
 
         if args.config and resume:
             config.update(read_yaml(args.config))
@@ -115,7 +139,7 @@ class ConfigParser:
 
         `function = config.init_ftn('name', module, a, b=1)`
         is equivalent to
-        `function = lambda *args, **kwargs: module.name(a, *args, b=1, **kwargs)`.”
+        `function = lambda *args, **kwargs: module.name(a, *args, b=1, **kwargs)`."
         """
         module_name = self[name]['type']
         module_args = dict(self[name]['args'])
@@ -161,6 +185,16 @@ def _update_config(config, modification):
         if v is not None:
             _set_by_path(config, k, v)
     return config
+
+def _deep_merge(base_dict, override_dict):
+    """deep merge two dicts"""
+    result = base_dict.copy()
+    for key, value in override_dict.items():
+        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+            result[key] = _deep_merge(result[key], value)
+        else:
+            result[key] = value
+    return result
 
 def _get_opt_name(flags):
     for flg in flags:
