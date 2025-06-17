@@ -17,7 +17,7 @@ Create a virtual environment and install dependencies using `requirements.yaml`:
 
 ```bash
 conda env create -f requirements.yaml
-conda activate BioBatchNet
+conda activate bbn
 ```
 
 ## BioBatchNet Usage
@@ -38,27 +38,21 @@ For scRNA-seq data, create a folder named `gene_data` inside the `Data` director
 
 ```bash
 mkdir -p Data/gene_data/
-mv <your-scrna-dataset> Data/gene_data/
+mv <your-scrna-dataset> Data/scRNA-seq/
 ```
 
 ### Batch effect correction
 
 **For IMC Data**
-To process **IMC** data, modify the dataset, network layers, and other parameters in `config_imc.yaml`, then run the following command to train BioBatchNet:
+To process **IMC** data, run the following command to train BioBatchNet:
 ```bash
-python IMC.py -c config_imc.yaml
-```
-
-✅ **Sample Data Available**  
-Sample IMC data is provided in the `Data/IMC` directory. You can directly test the pipeline using:
-```bash
-python IMC.py -c config_imc.yaml
+python IMC.py -c config/IMC/config_imc_IMMUcan.yaml
 ```
 
 **For scRNA-seq Data**
 To process **scRNA-seq** data, modify the dataset, network layers, and other parameters in `config_gene.yaml`, then run the following command to train BioBatchNet:
 ```bash
-python Gene.py -c config_gene.yaml
+python Gene.py -c config/IMC/config_rna_macaque.yaml
 ```
 
 ## CPC Usage
