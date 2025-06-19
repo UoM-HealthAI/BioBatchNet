@@ -1,6 +1,6 @@
 # base RNA config
 n_gpu: 1
-train_seed_list: [98]
+train_seed_list: null
 eval_sampling_seed: [42]
 
 arch:

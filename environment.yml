@@ -1,0 +1,8 @@
+name: bbn
+channels:
+  - defaults
+dependencies:
+  - python=3.9
+  - pip
+  - pip:
+    - -r requirements.txt

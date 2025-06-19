@@ -11,12 +11,12 @@ git clone https://github.com/Manchester-HealthAI/BioBatchNet](https://github.com
 
 ### Set Up the Environment
 
-Create a virtual environment and install dependencies using `requirements.yaml`:
+Create a virtual environment and install dependencies using `environment.yml`:
 
 #### Using Conda:
 
 ```bash
-conda env create -f environment.yaml
+conda env create -f environment.yml
 conda activate bbn
 ```
 
@@ -46,13 +46,13 @@ mv <your-scrna-dataset> Data/scRNA-seq/
 **For IMC Data**
 To process **IMC** data, run the following command to train BioBatchNet:
 ```bash
-python IMC.py -c config/IMC/config_imc_IMMUcan.yaml
+python imc.py -c config/IMC/IMMUcan.yaml
 ```
 
 **For scRNA-seq Data**
 To process **scRNA-seq** data, modify the dataset, run the following command to train BioBatchNet:
 ```bash
-python Gene.py -c config/IMC/config_rna_macaque.yaml
+python scrna.py -c config/IMC/macaque.yaml
 ```
 
 ## CPC Usage
@@ -78,7 +78,7 @@ To use BioBatchNet for **batch effect correction**, you need to download the cor
 ### **🔹 Download scRNA-seq Data**
 The **scRNA-seq dataset** is available on OneDrive. Click the link below to download:
 
-🔗 [Download scRNA-seq Data](https://livemanchesterac-my.sharepoint.com/:f:/g/personal/haiping_liu_student_manchester_ac_uk/Ep189brW69lJtv4ugZ9QdlkBx23hoFJWbTps_nK9LjZkyw?e=Iz9hOJ)
+🔗 [Download scRNA-seq Data](https://drive.google.com/drive/folders/1m4AkNc_KMadp7J_lL4jOQj9DdyKutEZ5?usp=sharing)
 
 ### **🔹 Download IMC Data**
 The **IMC dataset** can be accessed from the **Bodenmiller Group IMC datasets repository**. Visit the link below to explore and download the datasets:

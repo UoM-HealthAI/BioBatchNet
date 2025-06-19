@@ -20,7 +20,7 @@ class GRL(nn.Module):
     def forward(self, x) -> torch.tensor:
         return GradientReversalLayer.apply(x, self.alpha)
 
-#=======================================================================================================================#
+
 class ResidualBlock(nn.Module):
     """
     Args:

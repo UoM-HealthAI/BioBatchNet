@@ -54,6 +54,4 @@ Thumbs.db
 # Ignore environment configuration files
 *.env
 
-# Ignore txt
-*.txt
 

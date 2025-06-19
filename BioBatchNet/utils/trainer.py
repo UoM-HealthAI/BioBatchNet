@@ -118,7 +118,7 @@ class Trainer:
                 self.logger.info(f"Early stopping triggered at epoch {epoch}.")
                 break
 
-            if epoch % 5 == 0 or epoch == 1:
+            if epoch % 5 == 0:
                 evaluation_results = self._evaluate_epoch(epoch, sampling_fraction=0.3*self.sampling_fraction)
                 self.metric_tracker.log_to_wandb(evaluation_results)  
                 self.logger.info(f"epoch {epoch} evaluation results: {evaluation_results}")    
@@ -276,7 +276,7 @@ class Trainer:
 
             adata_dict = {'Raw': adata_unintegrated, 'BioBatchNet': adata_post}
             evaluation_results = evaluate_nn(adata_dict, fraction=sampling_fraction, seed=self.eval_sampling_seed)
-            evaluation_results = {}
+            
             return evaluation_results
     
     def _save_checkpoint(self, epoch):
