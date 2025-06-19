@@ -1,23 +1,22 @@
-_base_: config_base_rna.yaml
-name: macaque
+_base_: base_rna.yaml
+name: pancreas
 
 arch:
   args:
-    num_batch: 4
+    num_batch: 8
 
 trainer:
-  epochs: 200
   sampling_fraction: 
     pancreas: 1
     macaque: 1
     mousebrain: 1
 
 loss_weights:
-  recon_loss: 3
+  recon_loss: 3 
   discriminator: 0.02
   classifier: 0.02
-  mmd_loss_1: 0.0000
-  kl_loss_1: 0.000001
+  mmd_loss_1: 0.0
+  kl_loss_1: 5.0e-06
   kl_loss_2: 0.01
   ortho_loss: 0.0002
   kl_loss_size: 0.002

@@ -133,8 +133,7 @@ class GeneDataset(Dataset):
         sc.pp.highly_variable_genes(adata, n_top_genes=2000, flavor='seurat_v3', subset=True)
         sc.pp.normalize_total(adata, target_sum=1e4)
         sc.pp.log1p(adata)
-        processed_adata = adata[:, adata.var['highly_variable']]
-        return processed_adata
+        return adata
         
 
 

@@ -68,9 +68,13 @@ class GeneVAE(nn.Module):
         bio_z, mu1, logvar1 = self.bio_encoder(x)
         logvar1 = torch.clamp(logvar1, min=-3, max=3)
         size_factor, size_mu, size_logvar = self.size_encoder(x)
+        # clamp size_logvar to avoid extremely large values that could lead to numerical overflow / NaNs
+        size_logvar = torch.clamp(size_logvar, min=-3, max=3)
 
         # batch information
         batch_z, batch_mu, batch_logvar = self.batch_encoder(x)
+        # clamp batch_logvar as well
+        batch_logvar = torch.clamp(batch_logvar, min=-3, max=3)
 
         # combine information
         z_combine = torch.cat([bio_z, batch_z.detach()], dim=1)
@@ -84,7 +88,7 @@ class GeneVAE(nn.Module):
 
         # zinb 
         h = self.decoder(z_combine)
-        size_factor = torch.clamp(size_factor, min=-10, max=10)
+        size_factor = torch.clamp(size_factor, min=-3, max=3)
         _mean = self.mean_decoder(h) * torch.exp(size_factor)
         _mean = torch.clamp(_mean, 1e-5, 1e6)
 

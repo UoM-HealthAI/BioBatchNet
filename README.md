@@ -16,7 +16,7 @@ Create a virtual environment and install dependencies using `requirements.yaml`:
 #### Using Conda:
 
 ```bash
-conda env create -f requirements.yaml
+conda env create -f environment.yaml
 conda activate bbn
 ```
 
