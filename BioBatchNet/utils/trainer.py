@@ -118,13 +118,13 @@ class Trainer:
                 self.logger.info(f"Early stopping triggered at epoch {epoch}.")
                 break
 
-            if epoch % 5 == 0:
-                evaluation_results = self._evaluate_epoch(epoch, sampling_fraction=0.3*self.sampling_fraction)
-                self.metric_tracker.log_to_wandb(evaluation_results)  
-                self.logger.info(f"epoch {epoch} evaluation results: {evaluation_results}")    
+            # if epoch % 5 == 0:
+            #     evaluation_results = self._evaluate_epoch(epoch, sampling_fraction=0.3*self.sampling_fraction)
+            #     self.metric_tracker.log_to_wandb(evaluation_results)  
+            #     self.logger.info(f"epoch {epoch} evaluation results: {evaluation_results}")    
                     
-            if epoch % self.save_period == 0:
-                self._save_checkpoint(epoch)
+            # if epoch % self.save_period == 0:
+            #     self._save_checkpoint(epoch)
 
         # Load best model for final evaluation
         self._load_best_model()
@@ -239,21 +239,26 @@ class Trainer:
         with torch.no_grad():
             self.model.eval()
 
-            all_data, all_bio_z, all_batch_ids, all_cell_types = [], [], [], []
+            all_data, all_bio_z, all_batch_z, all_batch_ids, all_cell_types = [], [], [], [], []
 
             for data, batch_id, cell_type in self.eval_dataloader:
                 data, batch_id = data.to(self.device), batch_id.to(self.device)
 
-                bio_z, *_ = self.model(data)
+                if self.if_imc:
+                    bio_z, _, _, batch_z, *_ = self.model(data)
+                else:
+                    bio_z, _, _, batch_z, *_ = self.model(data)
                 
                 all_data.append(data.cpu().numpy())
                 all_bio_z.append(bio_z.cpu().numpy())
+                all_batch_z.append(batch_z.cpu().numpy())
                 all_batch_ids.append(batch_id.cpu().numpy())
                 all_cell_types.append(cell_type.cpu().numpy())
 
             # Convert lists to numpy arrays
             raw_data = np.concatenate(all_data, axis=0)
-            integrated_data = np.concatenate(all_bio_z, axis=0)
+            bio_integrated_data = np.concatenate(all_bio_z, axis=0)
+            batch_integrated_data = np.concatenate(all_batch_z, axis=0)
             batch_ids = np.concatenate(all_batch_ids, axis=0)
             cell_types = np.concatenate(all_cell_types, axis=0)
 
@@ -262,19 +267,31 @@ class Trainer:
             adata_unintegrated.obs['BATCH'] = pd.Categorical(batch_ids)
             adata_unintegrated.obs['celltype'] = pd.Categorical(cell_types)
 
-            # adata_post (integrated data)
-            adata_post = sc.AnnData(integrated_data)
-            adata_post.obs['BATCH'] = pd.Categorical(batch_ids)
-            adata_post.obs['celltype'] = pd.Categorical(cell_types)
-            adata_post.obsm['X_biobatchnet'] = integrated_data
+            # adata_bio (bio_z - biological features)
+            adata_bio = sc.AnnData(bio_integrated_data)
+            adata_bio.obs['BATCH'] = pd.Categorical(batch_ids)
+            adata_bio.obs['celltype'] = pd.Categorical(cell_types)
+            adata_bio.obsm['X_biobatchnet'] = bio_integrated_data
+
+            # adata_batch (batch_z - batch features)
+            adata_batch = sc.AnnData(batch_integrated_data)
+            adata_batch.obs['BATCH'] = pd.Categorical(batch_ids)
+            adata_batch.obs['celltype'] = pd.Categorical(cell_types)
+            adata_batch.obsm['X_batch'] = batch_integrated_data
 
             # visualization
             fig_save_dir = self.checkpoint_dir / 'fig'
             fig_save_dir.mkdir(parents=True, exist_ok=True)  
-            visualization(fig_save_dir, adata_post, 'X_biobatchnet', epoch)
+            
+            # Visualize bio_z (biological space)
+            visualization(fig_save_dir, adata_bio, 'X_biobatchnet', epoch)
+            
+            # Visualize batch_z (batch space)
+            visualization(fig_save_dir, adata_batch, 'X_batch', epoch)
+            
             self.logger.info(f"figure saved at {fig_save_dir}")
 
-            adata_dict = {'Raw': adata_unintegrated, 'BioBatchNet': adata_post}
+            adata_dict = {'Raw': adata_unintegrated, 'BioBatchNet': adata_bio}
             evaluation_results = evaluate_nn(adata_dict, fraction=sampling_fraction, seed=self.eval_sampling_seed)
             
             return evaluation_results
@@ -309,7 +326,7 @@ class Trainer:
         """
         resume_path = str(resume_path)
         self.logger.info("Loading checkpoint: {} ...".format(resume_path))
-        checkpoint = torch.load(resume_path)
+        checkpoint = torch.load(resume_path, weights_only=False)
         self.start_epoch = checkpoint['epoch'] + 1
         self.mnt_best = checkpoint['monitor_best']
 
@@ -355,7 +372,7 @@ class Trainer:
         best_path = self.checkpoint_dir / 'best_model.pth'
         if best_path.exists():
             self.logger.info(f"Loading best model from {best_path}")
-            checkpoint = torch.load(best_path)
+            checkpoint = torch.load(best_path, weights_only=False)
             self.model.load_state_dict(checkpoint['state_dict'])
             self.logger.info(f"Loaded best model from epoch {checkpoint['best_epoch']} with loss: {checkpoint['best_loss']:.4f}")
         else:

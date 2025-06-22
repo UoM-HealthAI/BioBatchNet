@@ -99,7 +99,7 @@ def log_gradients_to_wandb(model):
     })
 
 def visualization(save_dir, adata, emb, epoch):
-    sc.pp.subsample(adata, fraction=0.1)
+    sc.pp.subsample(adata, fraction=0.3)
     sc.pp.neighbors(adata, use_rep=emb)
     sc.tl.umap(adata)
     sc.pl.umap(adata, color=['BATCH', 'celltype'], frameon=False)

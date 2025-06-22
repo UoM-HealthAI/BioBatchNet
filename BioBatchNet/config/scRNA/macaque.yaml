@@ -6,11 +6,6 @@ arch:
     num_batch: 4
 
 trainer:
-  epochs: 200
-  sampling_fraction: 
-    pancreas: 1
-    macaque: 1
-    mousebrain: 1
 
 loss_weights:
   recon_loss: 3 

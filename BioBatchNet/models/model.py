@@ -66,15 +66,15 @@ class GeneVAE(nn.Module):
     def forward(self, x): 
         # bio information 
         bio_z, mu1, logvar1 = self.bio_encoder(x)
-        logvar1 = torch.clamp(logvar1, min=-3, max=3)
+        logvar1 = torch.clamp(logvar1, min=-5, max=5)
         size_factor, size_mu, size_logvar = self.size_encoder(x)
         # clamp size_logvar to avoid extremely large values that could lead to numerical overflow / NaNs
-        size_logvar = torch.clamp(size_logvar, min=-3, max=3)
+        size_logvar = torch.clamp(size_logvar, min=-5, max=5)
 
         # batch information
         batch_z, batch_mu, batch_logvar = self.batch_encoder(x)
         # clamp batch_logvar as well
-        batch_logvar = torch.clamp(batch_logvar, min=-3, max=3)
+        batch_logvar = torch.clamp(batch_logvar, min=-5, max=5)
 
         # combine information
         z_combine = torch.cat([bio_z, batch_z.detach()], dim=1)
@@ -88,13 +88,13 @@ class GeneVAE(nn.Module):
 
         # zinb 
         h = self.decoder(z_combine)
-        size_factor = torch.clamp(size_factor, min=-3, max=3)
+        size_factor = torch.clamp(size_factor, min=-5, max=5)
         _mean = self.mean_decoder(h) * torch.exp(size_factor)
-        _mean = torch.clamp(_mean, 1e-5, 1e6)
+        _mean = torch.clamp(_mean, 1e-6, 1e8)
 
         _disp = self.dispersion_decoder(h)
         _pi = self.dropout_decoder(h)
-        _pi = torch.clamp(_pi, 1e-4, 1.0 - 1e-4)
+        _pi = torch.clamp(_pi, 1e-6, 1.0 - 1e-6)
 
         return bio_z, mu1, logvar1, batch_z, batch_mu, batch_logvar, bio_batch_pred, batch_batch_pred, _mean, _disp, _pi, size_factor, size_mu, size_logvar
         
