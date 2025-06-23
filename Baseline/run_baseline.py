@@ -27,6 +27,7 @@ class BaselineEvaluator:
         self.timing_results = {
             'scVI': {'times': [], 'mean': None, 'std': None},
             'iMAP': {'times': [], 'mean': None, 'std': None},
+            'MRVI': {'times': [], 'mean': None, 'std': None},
             'Harmony': None,
             'BBKNN': None,
             'Scanorama': None,
@@ -55,7 +56,7 @@ class BaselineEvaluator:
         
         # Collect timing results
         timing_results = rb.get_timing_results()
-        for method in ['scVI', 'iMAP']:
+        for method in ['scVI', 'iMAP', 'MRVI']:
             self.timing_results[method]['times'].append(timing_results[method])
         
         logger.info(f"Finished running NN methods for seed={seed}")
@@ -87,7 +88,7 @@ class BaselineEvaluator:
             }
 
         # Calculate mean and std for timing results
-        for method in ['scVI', 'iMAP']:
+        for method in ['scVI', 'iMAP', 'MRVI']:
             times = self.timing_results[method]['times']
             self.timing_results[method]['mean'] = np.mean(times)
             self.timing_results[method]['std'] = np.std(times)
@@ -120,7 +121,7 @@ class BaselineEvaluator:
         formatted_results = {}
         
         # Format NN methods results
-        for method in ['scVI', 'iMAP']:
+        for method in ['scVI', 'iMAP', 'MRVI']:
             formatted_results[method] = {
                 'mean_time': self.timing_results[method]['mean'],
                 'std_time': self.timing_results[method]['std'],
@@ -202,30 +203,24 @@ if __name__ == "__main__":
             "sampling_seed": 42,
             "seed_list": [42, 52, 62, 72, 82]
         },
-        # 'pancreas':{
-        #     "mode": "rna",
-        #     "sampling_fraction": 1,
-        #     "sampling_seed": 42,
-        #     "seed_list": [42, 52, 62, 72, 82]
-        # },
-        # 'macaque':{
-        #     "mode": "rna",
-        #     "sampling_fraction": 1,
-        #     "sampling_seed": 42,
-        #     "seed_list": [42, 52, 62, 72, 82]
-        # },
-        # 'Immune_ALL_human':{
-        #     "mode": "rna",
-        #     "sampling_fraction": 1,
-        #     "sampling_seed": 42,
-        #     "seed_list": [42, 52, 62, 72, 82]
-        # },
-        # 'SubMouseBrain':{
-        #     "mode": "rna",
-        #     "sampling_fraction": 1,
-        #     "sampling_seed": 42,
-        #     "seed_list": [42, 52, 62, 72, 82]
-        # }
+        'pancreas':{
+            "mode": "rna",
+            "sampling_fraction": 1,
+            "sampling_seed": 42,
+            "seed_list": [42, 52, 62, 72, 82]
+        },
+        'macaque':{
+            "mode": "rna",
+            "sampling_fraction": 1,
+            "sampling_seed": 42,
+            "seed_list": [42, 52, 62, 72, 82]
+        },
+        'SubMouseBrain':{
+            "mode": "rna",
+            "sampling_fraction": 1,
+            "sampling_seed": 42,
+            "seed_list": [42, 52, 62, 72, 82]
+        }
     }
 
     for data_name, config in data_config.items():

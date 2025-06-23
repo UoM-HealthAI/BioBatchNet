@@ -31,6 +31,7 @@ class RunBaseline:
         Train batch effect correction using neural network (NN)-based methods:
         - scVI
         - iMAP
+        - MRVI
         """
         adata_base = RunBaseline.create_adata(self.features, self.batch, self.celltype)    
 
@@ -53,10 +54,19 @@ class RunBaseline:
         logger.info(f"iMAP time: {imap_time:.2f}s")
         self.timing_results['iMAP'] = imap_time
 
+        # Run and time MRVI
+        start_time = time.time()
+        output_mrvi = run_mrvi(adata_base.copy(), mode=self.mode)
+        end_time = time.time()
+        mrvi_time = end_time - start_time
+        logger.info(f"MRVI time: {mrvi_time:.2f}s")
+        self.timing_results['MRVI'] = mrvi_time
+
         gc.collect()
         return {"Raw": self.process_adata,
                 "scVI": output_scvi, 
-                "iMAP": output_imap}
+                "iMAP": output_imap,
+                "MRVI": output_mrvi}
     
     def train_non_nn(self):
         """
@@ -153,6 +163,17 @@ def run_imap(adata_imap, seed):
     output_imap.obs['celltype'] = adata_imap.obs['celltype'].values
     output_imap.obs['BATCH'] = adata_imap.obs['batch'].values
     return output_imap
+
+def run_mrvi(adata_mrvi, mode):
+    scvi.external.MRVI.setup_anndata(adata_mrvi, sample_key='BATCH')
+    if mode == 'imc':
+        model = scvi.external.MRVI(adata_mrvi, gene_likelihood='normal')
+    else:
+        model = scvi.external.MRVI(adata_mrvi, gene_likelihood='zinb')
+    model.train(max_epochs=100)
+    latent = model.get_latent_representation()
+    adata_mrvi.obsm["X_mrvi"] = latent
+    return adata_mrvi
 
 def run_harmony(adata_harm):
     sc.pp.pca(adata_harm)

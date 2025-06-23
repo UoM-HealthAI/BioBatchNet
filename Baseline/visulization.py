@@ -34,7 +34,7 @@ def cal_nn(adata_dict):
             sc.pp.neighbors(adata, use_rep=embed)  
         
         elif key ==  'BioBatchNet':
-            embed = 'X_berd'
+            embed = 'X_biobatchnet'
             sc.pp.neighbors(adata, use_rep=embed)  
 
         elif key ==  'scDML':
