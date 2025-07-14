@@ -106,7 +106,7 @@ class GeneDataset(Dataset):
         super().__init__()
         adata_dir = self.data_config[dataset_name]['data_dir']
         adata = sc.read_h5ad(adata_dir)
-        adata = GeneDataset.rna_process(adata)
+        self.adata = GeneDataset.rna_process(adata)
 
         self.data = adata.X
         self.cell_type = pd.Categorical(adata.obs['celltype']).codes
@@ -120,6 +120,30 @@ class GeneDataset(Dataset):
         cell_type = torch.tensor(self.cell_type[index], dtype=torch.long)
         batch = torch.tensor(self.batch[index], dtype=torch.long)
         return data, batch, cell_type
+    
+    def simulate_dropout(self, mask_fraction=0.05, in_place=False):
+        if not isinstance(self.adata.X, np.ndarray):
+            X_dense = self.adata.X.toarray()
+        else:
+            X_dense = self.adata.X.copy()
+
+        n_cells, n_genes = X_dense.shape
+        total_entries = n_cells * n_genes
+        n_mask = int(total_entries * mask_fraction)
+
+        zero_rows = np.random.randint(0, n_cells, n_mask)
+        zero_cols = np.random.randint(0, n_genes, n_mask)
+
+        # Target values
+        masked_values = X_dense[zero_rows, zero_cols].copy()
+
+        X_masked = X_dense.copy()
+        X_masked[zero_rows, zero_cols] = 0
+
+        if(in_place):
+            self.data = X_masked
+
+        return masked_values, X_masked, n_mask, zero_rows, zero_cols
 
     @staticmethod
     def rna_process(adata):
