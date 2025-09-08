@@ -2,6 +2,8 @@ from .modules import *
 from .VampPrior.vampprior import VampEncoder
 from torch import nn
 import torch.nn.functional as F
+import torch
+import numpy as np
 
 class IMCVAE(nn.Module):
     def __init__(self, **args):
@@ -40,6 +42,35 @@ class IMCVAE(nn.Module):
         reconstruction = self.decoder(z_combine)
 
         return bio_z, mu1, logvar1, batch_z, batch_mu, batch_logvar, bio_batch_pred, batch_batch_pred, reconstruction
+    
+    def fit(self, data, batch_info, epochs=100, lr=1e-3, batch_size=256):
+        from ..utils.trainer import Trainer
+        from ..utils.dataset import IMCDataset
+        
+        dataset = IMCDataset(data=data, batch_info=batch_info)
+        dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
+        
+        trainer = Trainer(self, lr=lr)
+        trainer.train(dataloader, epochs=epochs)
+        
+    def get_bio_embeddings(self, data):
+        self.eval()
+        with torch.no_grad():
+            if isinstance(data, np.ndarray):
+                data = torch.FloatTensor(data)
+            bio_z, _, _ = self.bio_encoder(data)
+            return bio_z.cpu().numpy()
+            
+    def correct_batch_effects(self, data):
+        self.eval()
+        with torch.no_grad():
+            if isinstance(data, np.ndarray):
+                data = torch.FloatTensor(data)
+            bio_z, _, _ = self.bio_encoder(data)
+            batch_z, _, _ = self.batch_encoder(data)
+            z_combine = torch.cat([bio_z, batch_z.detach()], dim=1)
+            reconstruction = self.decoder(z_combine)
+            return reconstruction.cpu().numpy()
         
 class GeneVAE(nn.Module):
     def __init__(self, **args):
