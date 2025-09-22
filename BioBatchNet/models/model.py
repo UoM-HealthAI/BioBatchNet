@@ -1,10 +1,16 @@
 from .modules import *
-from .VampPrior.vampprior import VampEncoder
 from torch import nn
 import torch.nn.functional as F
 import torch
 import numpy as np
+import torch.optim as optim
+import tempfile
 
+from ..utils.trainer import Trainer
+from ..parse_config import ConfigParser
+from torch.utils.data import DataLoader
+from ..utils.user_dataset import UserIMCDataset
+        
 class IMCVAE(nn.Module):
     def __init__(self, **args):
         super(IMCVAE, self).__init__()
@@ -43,34 +49,95 @@ class IMCVAE(nn.Module):
 
         return bio_z, mu1, logvar1, batch_z, batch_mu, batch_logvar, bio_batch_pred, batch_batch_pred, reconstruction
     
-    def fit(self, data, batch_info, epochs=100, lr=1e-3, batch_size=256):
-        from ..utils.trainer import Trainer
-        from ..utils.dataset import IMCDataset
+    def fit(self, data, batch_info, epochs=100, lr=1e-3, batch_size=256, loss_weights=None, device='cuda', save_dir=None):
+        # Set device
+        if device == 'cuda' and not torch.cuda.is_available():
+            device = 'cpu'
+            print("CUDA not available, using CPU")
+        device = torch.device(device)
+        self.to(device)
         
-        dataset = IMCDataset(data=data, batch_info=batch_info)
-        dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
+        # Create dataset using UserIMCDataset
+        dataset = UserIMCDataset(data, batch_info)
+        # Move tensors to device
+        dataset.data = dataset.data.to(device)
+        dataset.batch_labels = dataset.batch_labels.to(device)
+        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+
+        temp_dir = None
+        if save_dir is None:
+            temp_dir = tempfile.TemporaryDirectory()
+            save_dir_path = temp_dir.name
+        else:
+            save_dir_path = str(save_dir)
+
+        # Create minimal config for Trainer
+        config = {
+            'name': 'api_training',
+            'eval_sampling_seed': [42],
+            'trainer': {
+                'epochs': epochs,
+                'save_dir': save_dir_path,
+                'save_period': 100,
+                'verbosity': 1,
+                'early_stop': 100,
+                'if_imc': True,
+                'skip_intermediate_eval': True,
+                'sampling_fraction': {'api_training': 1.0}
+            },
+            'loss_weights': loss_weights or {
+                'recon_loss': 10,
+                'discriminator': 0.3,
+                'classifier': 1,
+                'mmd_loss_1': 0,
+                'kl_loss_1': 0.005,
+                'kl_loss_2': 0.1,
+                'ortho_loss': 0.01
+            }
+        }
         
-        trainer = Trainer(self, lr=lr)
-        trainer.train(dataloader, epochs=epochs)
+        config_parser = ConfigParser(config)
+        optimizer = optim.Adam(self.parameters(), lr=lr)
+        scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.1)
+
+        trainer = Trainer(
+            config=config_parser,
+            model=self,
+            optimizer=optimizer,
+            train_dataloader=dataloader,
+            eval_dataloader=dataloader,
+            scheduler=scheduler,
+            device=device,
+            seed=42
+        )
+
+        try:
+            trainer.train()
+        finally:
+            if temp_dir is not None:
+                temp_dir.cleanup()
         
     def get_bio_embeddings(self, data):
         self.eval()
+        device = next(self.parameters()).device
         with torch.no_grad():
             if isinstance(data, np.ndarray):
                 data = torch.FloatTensor(data)
+            data = data.to(device)
             bio_z, _, _ = self.bio_encoder(data)
             return bio_z.cpu().numpy()
             
     def correct_batch_effects(self, data):
+        """Return bio and batch embeddings"""
         self.eval()
+        device = next(self.parameters()).device
         with torch.no_grad():
             if isinstance(data, np.ndarray):
                 data = torch.FloatTensor(data)
+            data = data.to(device)
             bio_z, _, _ = self.bio_encoder(data)
             batch_z, _, _ = self.batch_encoder(data)
-            z_combine = torch.cat([bio_z, batch_z.detach()], dim=1)
-            reconstruction = self.decoder(z_combine)
-            return reconstruction.cpu().numpy()
+            return bio_z.cpu().numpy(), batch_z.cpu().numpy()
         
 class GeneVAE(nn.Module):
     def __init__(self, **args):
@@ -128,7 +195,98 @@ class GeneVAE(nn.Module):
         _pi = torch.clamp(_pi, 1e-6, 1.0 - 1e-6)
 
         return bio_z, mu1, logvar1, batch_z, batch_mu, batch_logvar, bio_batch_pred, batch_batch_pred, _mean, _disp, _pi, size_factor, size_mu, size_logvar
-        
+
+    def fit(self, data, batch_info, epochs=100, lr=1e-3, batch_size=256, loss_weights=None, device='cuda', save_dir=None):
+        # Set device
+        if device == 'cuda' and not torch.cuda.is_available():
+            device = 'cpu'
+            print("CUDA not available, using CPU")
+        device = torch.device(device)
+        self.to(device)
+
+        # Create dataset using UserIMCDataset
+        dataset = UserIMCDataset(data, batch_info)
+        # Move tensors to device
+        dataset.data = dataset.data.to(device)
+        dataset.batch_labels = dataset.batch_labels.to(device)
+        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+
+        temp_dir = None
+        if save_dir is None:
+            temp_dir = tempfile.TemporaryDirectory()
+            save_dir_path = temp_dir.name
+        else:
+            save_dir_path = str(save_dir)
+
+        # Create minimal config for Trainer
+        config = {
+            'name': 'api_training',
+            'eval_sampling_seed': [42],
+            'trainer': {
+                'epochs': epochs,
+                'save_dir': save_dir_path,
+                'save_period': 100,
+                'verbosity': 1,
+                'early_stop': 100,
+                'if_imc': False,  # GeneVAE is for scRNA
+                'skip_intermediate_eval': True,
+                'sampling_fraction': {'api_training': 1.0}
+            },
+            'loss_weights': loss_weights or {
+                'recon_loss': 10,
+                'discriminator': 0.04,
+                'classifier': 1,
+                'kl_loss_1': 1e-7,
+                'kl_loss_2': 0.01,
+                'ortho_loss': 0.0002,
+                'mmd_loss_1': 0,
+                'kl_loss_size': 0.002
+            }
+        }
+
+        config_parser = ConfigParser(config)
+        optimizer = optim.Adam(self.parameters(), lr=lr)
+        scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.1)
+
+        trainer = Trainer(
+            config=config_parser,
+            model=self,
+            optimizer=optimizer,
+            train_dataloader=dataloader,
+            eval_dataloader=dataloader,
+            scheduler=scheduler,
+            device=device,
+            seed=42
+        )
+
+        try:
+            trainer.train()
+        finally:
+            if temp_dir is not None:
+                temp_dir.cleanup()
+
+    def get_bio_embeddings(self, data):
+        self.eval()
+        device = next(self.parameters()).device
+        with torch.no_grad():
+            if isinstance(data, np.ndarray):
+                data = torch.FloatTensor(data)
+            data = data.to(device)
+            bio_z, _, _ = self.bio_encoder(data)
+            return bio_z.cpu().numpy()
+
+    def correct_batch_effects(self, data):
+        """Return bio and batch embeddings"""
+        self.eval()
+        device = next(self.parameters()).device
+        with torch.no_grad():
+            if isinstance(data, np.ndarray):
+                data = torch.FloatTensor(data)
+            data = data.to(device)
+            bio_z, _, _ = self.bio_encoder(data)
+            batch_z, _, _ = self.batch_encoder(data)
+            return bio_z.cpu().numpy(), batch_z.cpu().numpy()
+
 class MeanAct(nn.Module):
     def __init__(self):
         super(MeanAct, self).__init__()

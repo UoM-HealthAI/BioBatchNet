@@ -1,0 +1,88 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "biobatchnet"
+version = "0.1.7"
+description = "A deep learning framework for batch effect correction in biological data"
+readme = {file = "README.md", content-type = "text/markdown"}
+license = "MIT"
+authors = [
+    {name = "Haiping Liu", email = "haiping.liu.uom@gmail.com"},
+]
+maintainers = [
+    {name = "Haiping Liu", email = "haiping.liu.uom@gmail.com"},
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Operating System :: OS Independent",
+]
+keywords = ["batch-effect", "deep-learning", "single-cell", "IMC", "scRNA-seq", "bioinformatics"]
+requires-python = ">=3.8"
+dependencies = [
+    "torch>=1.10.0",
+    "numpy>=1.19.0",
+    "pandas>=1.2.0",
+    "scikit-learn>=0.24.0",
+    "scipy>=1.6.0",
+    "tqdm>=4.60.0",
+    "pyyaml>=5.4.0",
+    "anndata>=0.8.0",
+    "scanpy>=1.8.0",
+    "matplotlib>=3.3.0",
+    "seaborn>=0.11.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=6.0",
+    "pytest-cov>=2.0",
+    "black>=21.0",
+    "flake8>=3.9",
+    "mypy>=0.900",
+    "pre-commit>=2.15.0",
+]
+full = [
+    "scib>=1.0.0",
+]
+docs = [
+    "sphinx>=4.0",
+    "sphinx-rtd-theme>=1.0",
+    "nbsphinx>=0.8",
+]
+
+[project.urls]
+Homepage = "https://github.com/UoM-HealthAI/BioBatchNet"
+Repository = "https://github.com/UoM-HealthAI/BioBatchNet"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["BioBatchNet*"]
+
+[tool.setuptools.package-data]
+BioBatchNet = ["config/**/*.yaml"]
+
+[tool.black]
+line-length = 100
+target-version = ['py38', 'py39', 'py310', 'py311']
+include = '\.pyi?$'
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]

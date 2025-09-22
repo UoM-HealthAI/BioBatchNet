@@ -5,7 +5,7 @@ from pathlib import Path
 from functools import reduce, partial
 from operator import getitem
 from datetime import datetime
-from utils.util import read_yaml, write_yaml
+from .utils.util import read_yaml, write_yaml
 
 def setup_logging(save_dir, log_config='logger/logger_config.json', default_level=logging.INFO):
     """

@@ -101,7 +101,6 @@ typing-inspection==0.4.1
 tzdata==2025.2
 umap-learn==0.5.7
 urllib3==1.26.13
-wandb==0.20.1
 wcwidth==0.2.13
 wheel==0.45.1
 wrapt==1.17.2

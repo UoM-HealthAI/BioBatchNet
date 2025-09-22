@@ -1,7 +1,6 @@
 import torch.nn as nn
 import numpy as np
 import torch
-import wandb
 from pathlib import Path
 import torch.nn.functional as F
 from tqdm import tqdm
@@ -10,13 +9,7 @@ import pandas as pd
 from .util import visualization
 from .loss import kl_divergence, orthogonal_loss, ZINBLoss, MMDLoss
 from .util import MetricTracker
-
-import sys
-import os
-
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../'))
-sys.path.append(project_root)
-from Baseline.evaluation import evaluate_nn
+from .evaluation import evaluate_nn
 
 
 class EarlyStopping:
@@ -70,8 +63,6 @@ class Trainer:
         self.criterion_classification = nn.CrossEntropyLoss()
         self.mmd_loss = MMDLoss()
 
-        wandb.init(project=self.dataset_name, config=config)
-
         self.metric_tracker = MetricTracker(
             'total_loss', 'recon_loss', 'batch_loss_z1', 'batch_loss_z2',
             'mmd_loss_1', 'kl_loss_1', 'kl_loss_2', 'ortho_loss', 
@@ -95,16 +86,6 @@ class Trainer:
         self.checkpoint_dir = self.base_checkpoint_dir / f'seed_{self.seed}'
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
             
-        # Initialize new wandb run for this seed
-        if wandb.run is not None:
-            wandb.finish()
-        wandb.init(
-            project=self.config['name'],
-            config=self.config,
-            name=f"seed_{self.seed}",
-            group=str(self.checkpoint_dir)  
-        )
-
         # Training loop for current seed
         for epoch in tqdm(range(1, self.epochs + 1)):
             current_train_loss = self._train_epoch(epoch, mode='imc' if self.if_imc else 'rna')  
@@ -120,7 +101,7 @@ class Trainer:
 
             if epoch % 5 == 0:
                 evaluation_results = self._evaluate_epoch(epoch, sampling_fraction=0.3*self.sampling_fraction)
-                self.metric_tracker.log_to_wandb(evaluation_results)  
+                # Log evaluation results without wandb
                 self.logger.info(f"epoch {epoch} evaluation results: {evaluation_results}")    
                     
             # if epoch % self.save_period == 0:
@@ -128,14 +109,19 @@ class Trainer:
 
         # Load best model for final evaluation
         self._load_best_model()
-        evaluation_results = self._evaluate_epoch(epoch, sampling_fraction=self.sampling_fraction)
-        self.logger.info(f"Evaluation results after training with seed {self.seed}: {evaluation_results}")
         
-        # Save evaluation results for current seed
-        results_df = pd.DataFrame(evaluation_results)
-        results_df.to_csv(self.checkpoint_dir / f'seed_{self.seed}_evaluation_result.csv', index=True)
+        # Skip final evaluation for API usage
+        if self.config.config.get('trainer', {}).get('skip_intermediate_eval', False):
+            evaluation_results = {}
+            self.logger.info(f"Skipping final evaluation for API usage")
+        else:
+            evaluation_results = self._evaluate_epoch(epoch, sampling_fraction=self.sampling_fraction)
+            self.logger.info(f"Evaluation results after training with seed {self.seed}: {evaluation_results}")
+            
+            # Save evaluation results for current seed
+            results_df = pd.DataFrame(evaluation_results)
+            results_df.to_csv(self.checkpoint_dir / f'seed_{self.seed}_evaluation_result.csv', index=True)
 
-        wandb.finish()
          
         return evaluation_results
     
@@ -147,7 +133,7 @@ class Trainer:
         total_correct_z2 = 0
         total_samples = 0
 
-        for data, batch_id, _ in self.train_dataloader:
+        for data, batch_id in self.train_dataloader:
             data, batch_id = data.to(self.device), batch_id.to(self.device)
             self.optimizer.zero_grad()
 
@@ -219,11 +205,8 @@ class Trainer:
         z1_accuracy = total_correct_z1 / total_samples * 100
         z2_accuracy = total_correct_z2 / total_samples * 100
 
-        # log to wandb
-        self.metric_tracker.log_to_wandb({
-            'Z1 Accuracy': z1_accuracy,
-            'Z2 Accuracy': z2_accuracy
-        })
+        # Log accuracies (without wandb)
+        # Could save to file or just use logger
 
         self.logger.info(
             f"Epoch {epoch}: "
@@ -236,6 +219,10 @@ class Trainer:
         return self.metric_tracker.avg('total_loss')
 
     def _evaluate_epoch(self, epoch, sampling_fraction):
+        # Skip evaluation for API usage
+        if self.config.config.get('trainer', {}).get('skip_intermediate_eval', False):
+            return {}
+            
         with torch.no_grad():
             self.model.eval()
 
