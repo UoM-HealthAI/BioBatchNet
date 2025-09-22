@@ -15,6 +15,7 @@ CPC/CPC_experiment/IMMU_raw.ipynb
 CPC/CPC_experiment/IMMU_scvi.ipynb
 
 Data/
+data/
 csf_log/
 Logs/
 Results/
