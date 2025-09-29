@@ -49,7 +49,7 @@ class IMCVAE(nn.Module):
 
         return bio_z, mu1, logvar1, batch_z, batch_mu, batch_logvar, bio_batch_pred, batch_batch_pred, reconstruction
     
-    def fit(self, data, batch_info, epochs=100, lr=1e-3, batch_size=256, loss_weights=None, device='cuda', save_dir=None):
+    def fit(self, data, batch_info, epochs=100, lr=1e-4, batch_size=256, loss_weights=None, device='cuda', save_dir=None):
         # Set device
         if device == 'cuda' and not torch.cuda.is_available():
             device = 'cpu'
@@ -89,7 +89,6 @@ class IMCVAE(nn.Module):
                 'recon_loss': 10,
                 'discriminator': 0.3,
                 'classifier': 1,
-                'mmd_loss_1': 0,
                 'kl_loss_1': 0.005,
                 'kl_loss_2': 0.1,
                 'ortho_loss': 0.01
@@ -239,7 +238,6 @@ class GeneVAE(nn.Module):
                 'kl_loss_1': 1e-7,
                 'kl_loss_2': 0.01,
                 'ortho_loss': 0.0002,
-                'mmd_loss_1': 0,
                 'kl_loss_size': 0.002
             }
         }

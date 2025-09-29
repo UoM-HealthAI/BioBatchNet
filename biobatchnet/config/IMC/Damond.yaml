@@ -14,7 +14,6 @@ loss_weights:
   recon_loss: 10
   discriminator: 0.3
   classifier: 1
-  mmd_loss_1: 0
   kl_loss_1: 0.001
   kl_loss_2: 0.1
   ortho_loss: 0.01

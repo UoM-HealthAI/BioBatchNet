@@ -11,18 +11,3 @@ scanpy>=1.9.0
 matplotlib>=3.7.0
 seaborn>=0.12.0
 h5py>=3.8.0
-
-# Optional dependencies
-# Uncomment if needed:
-
-# For batch effect evaluation
-# scib>=1.1.0
-
-# For experiment tracking
-# wandb>=0.15.0
-
-# For additional visualization
-# plotly>=5.14.0
-
-# Note: For CUDA support with PyTorch, install with:
-# pip install torch --index-url https://download.pytorch.org/whl/cu118

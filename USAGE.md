@@ -60,7 +60,6 @@ loss_weights = {
     'recon_loss': 10,        # Reconstruction loss weight
     'discriminator': 0.3,    # Adversarial loss weight
     'classifier': 1,         # Batch classifier loss weight
-    'mmd_loss_1': 0,        # MMD loss weight
     'kl_loss_1': 0.005,     # KL divergence weight for bio encoder
     'kl_loss_2': 0.1,       # KL divergence weight for batch encoder
     'ortho_loss': 0.01      # Orthogonality loss weight
@@ -155,7 +154,6 @@ loss_weights = {
     'recon_loss': 10,
     'discriminator': 0.3,
     'classifier': 1,
-    'mmd_loss_1': 0,
     'kl_loss_1': 0.005,
     'kl_loss_2': 0.1,
     'ortho_loss': 0.01
@@ -166,7 +164,6 @@ loss_weights = {
     'recon_loss': 10,
     'discriminator': 0.1,
     'classifier': 1,
-    'mmd_loss_1': 0.01,
     'kl_loss_1': 0.0,
     'kl_loss_2': 0.1,
     'ortho_loss': 0.01
@@ -183,7 +180,6 @@ loss_weights = {
     'kl_loss_1': 1e-7,
     'kl_loss_2': 0.01,
     'ortho_loss': 0.0002,
-    'mmd_loss_1': 0,
     'kl_loss_size': 0.002
 }
 ```

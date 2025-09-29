@@ -21,7 +21,6 @@ def setup_logging(save_dir, log_config='logger/logger_config.json', default_leve
 
         logging.config.dictConfig(config)
     else:
-        print("Warning: logging configuration file is not found in {}.".format(log_config))
         logging.basicConfig(level=default_level)
 
 class ConfigParser:

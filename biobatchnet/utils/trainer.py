@@ -7,7 +7,7 @@ from tqdm import tqdm
 import scanpy as sc
 import pandas as pd
 from .util import visualization
-from .loss import kl_divergence, orthogonal_loss, ZINBLoss, MMDLoss
+from .loss import kl_divergence, orthogonal_loss, ZINBLoss
 from .util import MetricTracker
 from .evaluation import evaluate_nn
 
@@ -61,11 +61,10 @@ class Trainer:
         self.mse_recon = nn.MSELoss()
         self.zinb_recon = ZINBLoss().cuda()
         self.criterion_classification = nn.CrossEntropyLoss()
-        self.mmd_loss = MMDLoss()
 
         self.metric_tracker = MetricTracker(
             'total_loss', 'recon_loss', 'batch_loss_z1', 'batch_loss_z2',
-            'mmd_loss_1', 'kl_loss_1', 'kl_loss_2', 'ortho_loss', 
+            'kl_loss_1', 'kl_loss_2', 'ortho_loss',
         )
 
         # Base directory for saving all checkpoints and results
@@ -145,10 +144,8 @@ class Trainer:
                 bio_z, bio_mu, bio_logvar, batch_z, batch_mu, batch_logvar, bio_batch_pred, batch_batch_pred, _mean, _disp, _pi, size_factor, size_mu, size_logvar = self.model(data)
                 recon_loss = self.zinb_recon(data, _mean, _disp, _pi)
             
-            # bio kl loss 
+            # bio kl loss
             kl_loss_1 = kl_divergence(bio_mu, bio_logvar).mean()
-            bio_z_prior = torch.randn_like(bio_z, device=self.device)
-            mmd_loss = self.mmd_loss(bio_z, bio_z_prior)
 
             # batch kl loss
             kl_loss_2 = kl_divergence(batch_mu, batch_logvar).mean()
@@ -169,7 +166,6 @@ class Trainer:
             loss = (self.loss_weights['recon_loss'] * recon_loss +
                     self.loss_weights['discriminator'] * batch_loss_z1 +
                     self.loss_weights['classifier'] * batch_loss_z2 +
-                    self.loss_weights['mmd_loss_1'] * mmd_loss +
                     self.loss_weights['kl_loss_1'] * kl_loss_1 +
                     self.loss_weights['kl_loss_2'] * kl_loss_2 +
                     self.loss_weights['ortho_loss'] * ortho_loss_value +
@@ -184,7 +180,6 @@ class Trainer:
                 'recon_loss': recon_loss.item(),
                 'batch_loss_z1': batch_loss_z1.item(),
                 'batch_loss_z2': batch_loss_z2.item(),
-                'mmd_loss_1': mmd_loss.item(),
                 'kl_loss_1': kl_loss_1.item(),
                 'kl_loss_2': kl_loss_2.item(),
                 'ortho_loss': ortho_loss_value.item(),

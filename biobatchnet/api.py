@@ -57,25 +57,20 @@ def correct_batch_effects(
     # Default loss weights
     if loss_weights is None:
         if data_type == 'imc':
-            if num_batches >= 30:
+            if num_batches >= 15:
                 loss_weights = {
                     'recon_loss': 10, 'discriminator': 0.1, 'classifier': 1,
-                    'mmd_loss_1': 0.01, 'kl_loss_1': 0.0, 'kl_loss_2': 0.1, 'ortho_loss': 0.01
-                }
-            elif num_batches >= 10:
-                loss_weights = {
-                    'recon_loss': 10, 'discriminator': 0.3, 'classifier': 1,
-                    'mmd_loss_1': 0, 'kl_loss_1': 0.001, 'kl_loss_2': 0.1, 'ortho_loss': 0.01
+                    'kl_loss_1': 0.005, 'kl_loss_2': 0.1, 'ortho_loss': 0.01
                 }
             else:
                 loss_weights = {
                     'recon_loss': 10, 'discriminator': 0.3, 'classifier': 1,
-                    'mmd_loss_1': 0, 'kl_loss_1': 0.005, 'kl_loss_2': 0.1, 'ortho_loss': 0.01
+                    'kl_loss_1': 0.005, 'kl_loss_2': 0.1, 'ortho_loss': 0.01
                 }
         else:  # scrna
             loss_weights = {
                 'recon_loss': 10, 'discriminator': 0.04, 'classifier': 1,
-                'kl_loss_1': 1e-7, 'kl_loss_2': 0.01, 'ortho_loss': 0.0002, 'mmd_loss_1': 0, 'kl_loss_size': 0.002
+                'kl_loss_1': 1e-7, 'kl_loss_2': 0.01, 'ortho_loss': 0.0002, 'kl_loss_size': 0.002
             }
     
     if data_type == 'imc':
@@ -98,7 +93,7 @@ def correct_batch_effects(
             batch_classifier_layers_weak=classifier_weak,
             **kwargs
         )
-    else:  # scrna
+    else: 
         model = GeneVAE(
             in_sz=input_dim,
             out_sz=input_dim,
