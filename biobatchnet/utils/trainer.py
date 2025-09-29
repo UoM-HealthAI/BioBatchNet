@@ -278,7 +278,7 @@ class Trainer:
             
             self.logger.info(f"figure saved at {fig_save_dir}")
 
-            adata_dict = {'Raw': adata_unintegrated, 'BioBatchNet': adata_bio}
+            adata_dict = {'Raw': adata_unintegrated, 'biobatchnet': adata_bio}
             evaluation_results = evaluate_nn(adata_dict, fraction=sampling_fraction, seed=self.eval_sampling_seed)
             
             return evaluation_results

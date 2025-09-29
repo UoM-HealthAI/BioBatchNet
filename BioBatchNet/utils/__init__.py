@@ -1,2 +1,0 @@
-"""Utility subpackage for BioBatchNet."""
-

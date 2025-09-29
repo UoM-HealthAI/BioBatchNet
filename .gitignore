@@ -70,7 +70,7 @@ coverage.xml
 
 # Training/checkpoint outputs (project-specific)
 temp_training/
-models/
+/models/
 log/
 **/fig/
 

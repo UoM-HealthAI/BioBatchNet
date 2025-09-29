@@ -23,8 +23,8 @@ pip install -e .
 ### Basic Usage
 
 ```python
-import BioBatchNet
-from BioBatchNet import correct_batch_effects
+import biobatchnet
+from biobatchnet import correct_batch_effects
 import anndata as ad
 
 # Load your data
@@ -100,7 +100,7 @@ bio_embeddings, batch_embeddings = correct_batch_effects(
 For more control, use the models directly:
 
 ```python
-from BioBatchNet import IMCVAE, GeneVAE
+from biobatchnet import IMCVAE, GeneVAE
 
 # For IMC data
 model = IMCVAE(
@@ -191,10 +191,10 @@ loss_weights = {
 ## Example Workflow
 
 ```python
-import BioBatchNet
+import biobatchnet
 import anndata as ad
 import numpy as np
-from BioBatchNet import correct_batch_effects
+from biobatchnet import correct_batch_effects
 
 # 1. Load data
 adata = ad.read_h5ad('IMMUcan_batch.h5ad')
@@ -223,7 +223,7 @@ adata.obsm['X_biobatchnet'] = bio_embeddings
 adata.obsm['X_batch'] = batch_embeddings
 
 # 5. Optional: Get embeddings for visualization
-from BioBatchNet import IMCVAE
+from biobatchnet import IMCVAE
 model = IMCVAE(
     in_sz=X.shape[1],
     out_sz=X.shape[1],

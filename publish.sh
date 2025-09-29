@@ -69,7 +69,6 @@ elif [ "$MODE" == "prod" ]; then
     fi
 else
     echo -e "${RED}Invalid mode: $MODE${NC}"
-    echo "Usage: ./publish.sh [test|prod]"
     exit 1
 fi
 

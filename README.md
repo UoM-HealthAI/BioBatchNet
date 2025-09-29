@@ -32,8 +32,8 @@ pip install torch numpy pandas anndata
 ### Basic Usage
 
 ```python
-import BioBatchNet
-from BioBatchNet import correct_batch_effects
+import biobatchnet
+from biobatchnet import correct_batch_effects
 import anndata as ad
 
 # Load your data
@@ -110,7 +110,7 @@ bio_embeddings, batch_embeddings = correct_batch_effects(
 For more control, use the models directly:
 
 ```python
-from BioBatchNet import IMCVAE, GeneVAE
+from biobatchnet import IMCVAE, GeneVAE
 
 # For IMC data
 model = IMCVAE(
@@ -139,7 +139,7 @@ corrected_data = model.correct_batch_effects(data)
 
 ### Config-Driven Training Scripts
 
-Scripts such as `BioBatchNet/imc.py` and `BioBatchNet/scrna.py` reproduce our research training pipeline. They expect the original datasets to be placed under `Data/...` (see config YAMLs for paths) and are not included in the pip distribution. For typical usage please prefer the Python API or model classes above.
+Scripts such as `biobatchnet/imc.py` and `biobatchnet/scrna.py` reproduce our research training pipeline. They expect the original datasets to be placed under `Data/...` (see config YAMLs for paths) and are not included in the pip distribution. For typical usage please prefer the Python API or model classes above.
 
 ### Input Data Requirements
 
@@ -189,10 +189,10 @@ loss_weights = {
 ## Example Workflow
 
 ```python
-import BioBatchNet
+import biobatchnet
 import anndata as ad
 import numpy as np
-from BioBatchNet import correct_batch_effects
+from biobatchnet import correct_batch_effects
 
 # 1. Load data
 adata = ad.read_h5ad('IMMUcan_batch.h5ad')
@@ -220,7 +220,7 @@ corrected = correct_batch_effects(
 adata.layers['corrected'] = corrected
 
 # 5. Optional: Get embeddings for visualization
-from BioBatchNet import IMCVAE
+from biobatchnet import IMCVAE
 model = IMCVAE(
     in_sz=X.shape[1],
     out_sz=X.shape[1],

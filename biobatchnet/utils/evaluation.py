@@ -1,5 +1,5 @@
 """
-Simple evaluation functions for BioBatchNet
+Simple evaluation functions for biobatchnet
 Note: Full evaluation requires scib package (optional dependency)
 """
 import numpy as np
@@ -31,8 +31,8 @@ def evaluate_nn(adata_dict, fraction=1.0, seed=42):
             'note': 'Full metrics require scib package'
         }
         
-        # If BioBatchNet, check if embedding exists
-        if key == 'BioBatchNet' and 'X_biobatchnet' in adata.obsm:
+        # If biobatchnet, check if embedding exists
+        if key == 'biobatchnet' and 'X_biobatchnet' in adata.obsm:
             results[key]['embedding_dim'] = adata.obsm['X_biobatchnet'].shape[1]
     
     return results

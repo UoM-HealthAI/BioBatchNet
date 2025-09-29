@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = ["setuptools>=61.0", "wheel", "setuptools-scm>=8.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "biobatchnet"
-version = "0.1.7"
+dynamic = ["version"]
 description = "A deep learning framework for batch effect correction in biological data"
 readme = {file = "README.md", content-type = "text/markdown"}
 license = "MIT"
@@ -19,14 +19,13 @@ classifiers = [
     "Intended Audience :: Science/Research",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Operating System :: OS Independent",
 ]
 keywords = ["batch-effect", "deep-learning", "single-cell", "IMC", "scRNA-seq", "bioinformatics"]
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 dependencies = [
     "torch>=2.0.0",
     "numpy>=1.26.0",
@@ -43,21 +42,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = [
-    "pytest>=6.0",
-    "pytest-cov>=2.0",
-    "black>=21.0",
-    "flake8>=3.9",
-    "mypy>=0.900",
-    "pre-commit>=2.15.0",
-]
 full = [
     "scib>=1.0.0",
-]
-docs = [
-    "sphinx>=4.0",
-    "sphinx-rtd-theme>=1.0",
-    "nbsphinx>=0.8",
 ]
 
 [project.urls]
@@ -68,19 +54,23 @@ Repository = "https://github.com/UoM-HealthAI/BioBatchNet"
 include-package-data = true
 
 [tool.setuptools.packages.find]
-include = ["BioBatchNet*"]
+include = ["biobatchnet*"]
 
 [tool.setuptools.package-data]
-BioBatchNet = ["config/**/*.yaml"]
+biobatchnet = ["config/**/*.yaml"]
 
 [tool.black]
+[tool.black]
 line-length = 100
-target-version = ['py38', 'py39', 'py310', 'py311']
-include = '\.pyi?$'
+target-version = ['py39', 'py310', 'py311']
 
 [tool.isort]
 profile = "black"
 line_length = 100
+
+[tool.setuptools_scm]
+version_scheme = "no-guess-dev"
+local_scheme = "node-and-date"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
