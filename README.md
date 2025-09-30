@@ -36,7 +36,7 @@ pip install biobatchnet
 
 **For Development:**
 ```bash
-git clone https://github.com/Manchester-HealthAI/BioBatchNet
+git clone https://github.com/UoM-HealthAI/BioBatchNet
 cd BioBatchNet
 pip install -e .
 ```
@@ -78,10 +78,11 @@ bio_embeddings, batch_embeddings = correct_batch_effects(
 # Add embeddings to AnnData
 adata.obsm['X_biobatchnet'] = bio_embeddings
 ```
+**For detailed documentation and examples:**  
+(Note: PyPI pages do not support previewing relative links from the repository, so absolute links and nbviewer previews are provided here. If you cannot open the original relative links on PyPI, this is expected.)
 
-**For detailed documentation and examples:**
-- 📖 **[USAGE.md](USAGE.md)** - Complete API documentation and parameter guide
-- 📓 **[tutorial.ipynb](tutorial.ipynb)** - Interactive tutorial with three usage patterns
+- 📖 **USAGE Documentation:** [GitHub](https://github.com/UoM-HealthAI/BioBatchNet/blob/main/USAGE.md)
+- 📓 **Tutorial Notebook:** [GitHub](https://github.com/UoM-HealthAI/BioBatchNet/blob/main/tutorial.ipynb) | [nbviewer preview](https://nbviewer.org/github/UoM-HealthAI/BioBatchNet/blob/main/tutorial.ipynb)
 
 ### Config-based Training (For Development/Research)
 
