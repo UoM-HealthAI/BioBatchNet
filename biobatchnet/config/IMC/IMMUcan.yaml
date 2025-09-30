@@ -1,21 +1,18 @@
 _base_: base_imc.yaml
-name: Damond
+name: IMMUcan
 
 arch:
   args:
-    in_sz: 38
-    out_sz: 38
-    num_batch: 12
+    in_sz: 40
+    out_sz: 40
+    num_batch: 4
 
-trainer:
-  epochs: 100
 
 loss_weights:
   recon_loss: 10
   discriminator: 0.3
   classifier: 1
-  mmd_loss_1: 0
-  kl_loss_1: 0.001
+  kl_loss_1: 0.005
   kl_loss_2: 0.1
   ortho_loss: 0.01
 

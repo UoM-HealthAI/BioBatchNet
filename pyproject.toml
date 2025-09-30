@@ -1,0 +1,78 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel", "setuptools-scm>=8.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "biobatchnet"
+dynamic = ["version"]
+description = "A VAE framework for batch effect correction in biological data"
+readme = {file = "README.md", content-type = "text/markdown"}
+license = {text = "MIT"}
+authors = [
+    {name = "Haiping Liu", email = "haiping.liu.uom@gmail.com"},
+]
+maintainers = [
+    {name = "Haiping Liu", email = "haiping.liu.uom@gmail.com"},
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Operating System :: OS Independent",
+]
+keywords = ["batch-effect", "deep-learning", "single-cell", "IMC", "scRNA-seq", "bioinformatics"]
+requires-python = ">=3.8"
+dependencies = [
+    "torch>=2.0.0",
+    "numpy>=1.24.0",
+    "pandas>=2.0.0",
+    "scikit-learn>=1.3.0",
+    "scipy>=1.10.0",
+    "tqdm>=4.65.0",
+    "pyyaml>=6.0",
+    "anndata>=0.9.0",
+    "scanpy>=1.9.0",
+    "matplotlib>=3.7.0",
+    "seaborn>=0.12.0",
+    "h5py>=3.8.0",
+]
+
+[project.optional-dependencies]
+full = [
+    "scib>=1.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/UoM-HealthAI/BioBatchNet"
+Repository = "https://github.com/UoM-HealthAI/BioBatchNet"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["biobatchnet*"]
+
+[tool.setuptools.package-data]
+biobatchnet = ["config/**/*.yaml"]
+
+[tool.black]
+line-length = 100
+target-version = ['py39', 'py310', 'py311']
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.setuptools_scm]
+version_scheme = "no-guess-dev"
+local_scheme = "node-and-date"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]

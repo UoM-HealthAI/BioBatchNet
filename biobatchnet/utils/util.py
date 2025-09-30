@@ -1,6 +1,5 @@
 import yaml
 import json
-import wandb
 import torch
 from pathlib import Path
 from itertools import repeat
@@ -71,32 +70,13 @@ class MetricTracker:
     def result(self):
         return {key: self.avg(key) for key in self.data}
 
-    def log_to_wandb(self, extra_metrics=None):
+    def log_metrics(self, extra_metrics=None):
+        """Log metrics (placeholder; extend with your logger of choice)."""
         metrics = self.result()
-
         if extra_metrics:
             metrics.update(extra_metrics)
-
-        wandb.log(metrics)
-
-def log_gradients_to_wandb(model):
-    grad_norms = []
-    
-    for name, param in model.named_parameters():
-        if param.grad is not None:
-            grad_norms.append(param.grad.norm().item())  # Collect gradient norms
-    
-    # Aggregate statistics for the gradients
-    avg_grad_norm = sum(grad_norms) / len(grad_norms) if len(grad_norms) > 0 else 0
-    max_grad_norm = max(grad_norms) if len(grad_norms) > 0 else 0
-    min_grad_norm = min(grad_norms) if len(grad_norms) > 0 else 0
-    
-    # Log to wandb
-    wandb.log({
-        'avg_grad_norm': avg_grad_norm,
-        'max_grad_norm': max_grad_norm,
-        'min_grad_norm': min_grad_norm,
-    })
+        return metrics  # Disabled for API usage
+        
 
 def visualization(save_dir, adata, emb, epoch):
     sc.pp.subsample(adata, fraction=0.3)

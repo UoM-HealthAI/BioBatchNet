@@ -15,6 +15,7 @@ CPC/CPC_experiment/IMMU_raw.ipynb
 CPC/CPC_experiment/IMMU_scvi.ipynb
 
 Data/
+data/
 csf_log/
 Logs/
 Results/
@@ -54,4 +55,21 @@ Thumbs.db
 # Ignore environment configuration files
 *.env
 
+# Build and packaging artifacts
+dist/
+build/
+*.egg-info/
+
+# Test, coverage, and tooling caches
+.pytest_cache/
+.mypy_cache/
+.tox/
+htmlcov/
+.coverage
+coverage.xml
+
+# Training/checkpoint outputs (project-specific)
+temp_training/
+log/
+**/fig/
 

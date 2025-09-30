@@ -1,39 +1,42 @@
 import argparse
 import collections
 import torch
+import os
+import numpy as np
+import random
 import pandas as pd
 
 from parse_config import ConfigParser
 import models.model as model
-from utils.dataset import GeneDataset
-from utils.util import prepare_device, set_random_seed
+from utils.dataset import IMCDataset
+from utils.util import set_random_seed
 from utils.trainer import Trainer
+
 
 def main(config):
     logger = config.get_logger('train')
-    
-    # prepare data
-    dataset_name = config['name']       
-    dataset = GeneDataset(dataset_name)
+
+    dataset_name = config['name']
+    dataset = IMCDataset(dataset_name)
     train_dataloader = config.init_obj('train_dataloader', torch.utils.data , dataset)
     eval_dataloader = config.init_obj('eval_dataloader', torch.utils.data , dataset)
-    device, _ = prepare_device(config['n_gpu'])
+    device = 'cuda' 
 
     all_evaluation_results = []
     for seed in config['train_seed_list']:
         set_random_seed(seed)
-        BioBatchNet = config.init_obj('arch', model)
-        logger.info(BioBatchNet)
-        BioBatchNet = BioBatchNet.to(device)
+        biobatchnet = config.init_obj('arch', model)
+        logger.info(biobatchnet)
+        biobatchnet = biobatchnet.to(device)
 
-        # Initialize optimizer and lr_scheduler
-        trainable_params = filter(lambda p: p.requires_grad, BioBatchNet.parameters())
+        # optimizer - simplified with unified learning rate
+        trainable_params = filter(lambda p: p.requires_grad, biobatchnet.parameters())
         optimizer = config.init_obj('optimizer', torch.optim, trainable_params)
         lr_scheduler = config.init_obj('lr_scheduler', torch.optim.lr_scheduler, optimizer)
 
         # trainer
-        trainer = Trainer(config, 
-                        model = BioBatchNet, 
+        trainer = Trainer(config,
+                        model = biobatchnet, 
                         optimizer = optimizer, 
                         train_dataloader = train_dataloader,
                         eval_dataloader = eval_dataloader,
@@ -41,6 +44,7 @@ def main(config):
                         device = device,
                         seed = seed)
         
+        # Start training
         logger.info("------------------training begin------------------")
         result_df = trainer.train()
         all_evaluation_results.append(result_df)
@@ -53,13 +57,11 @@ def main(config):
 
 
 if __name__ == '__main__':
-    args = argparse.ArgumentParser(description='BioBatchNet training')
+    args = argparse.ArgumentParser(description='biobatchnet training')
     args.add_argument('-c', '--config', default=None, type=str,
                       help='config file path')
     args.add_argument('-r', '--resume', default=None, type=str,
                       help='path to latest checkpoint (default: None)')
-    args.add_argument('-d', '--device', default=None, type=str,
-                      help='indices of GPUs to enable (default: all)')
     
     CustomArgs = collections.namedtuple('CustomArgs', 'flags type target')
     options = [
@@ -70,4 +72,4 @@ if __name__ == '__main__':
     config = ConfigParser.from_args(args, options)
     main(config)
 
-    
+
