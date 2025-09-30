@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "biobatchnet"
 dynamic = ["version"]
-description = "A deep learning framework for batch effect correction in biological data"
+description = "A VAE framework for batch effect correction in biological data"
 readme = {file = "README.md", content-type = "text/markdown"}
 license = {text = "MIT"}
 authors = [

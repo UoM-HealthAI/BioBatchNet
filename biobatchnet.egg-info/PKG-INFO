@@ -1,7 +1,7 @@
 Metadata-Version: 2.4
 Name: biobatchnet
-Version: 0.0.post1.dev41+gf1a712ac4.d20250929
-Summary: A deep learning framework for batch effect correction in biological data
+Version: 0.1.8.post1.dev0+g10fca92ad.d20250930
+Summary: A VAE framework for batch effect correction in biological data
 Author-email: Haiping Liu <haiping.liu.uom@gmail.com>
 Maintainer-email: Haiping Liu <haiping.liu.uom@gmail.com>
 License: MIT
@@ -38,284 +38,147 @@ Dynamic: license-file
 # BioBatchNet
 
 [![PyPI version](https://badge.fury.io/py/biobatchnet.svg)](https://badge.fury.io/py/biobatchnet)
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-BioBatchNet is a deep learning framework for batch effect correction in biological data, supporting both single-cell RNA-seq (scRNA-seq) and Imaging Mass Cytometry (IMC) data.
+BioBatchNet is a VAE framework for batch effect correction in biological data, supporting both **single-cell RNA-seq (scRNA-seq)** and **Imaging Mass Cytometry (IMC)** data.
+
+---
+
+## Features
+
+- **Multi-modal Support**: Works with both scRNA-seq and IMC data
+- **Easy-to-Use API**: One-line batch correction with `correct_batch_effects()`
+- **Flexible Architecture**: Customizable neural network parameters
+- **Adaptive Loss Weights**: Automatically adjusts based on dataset characteristics
+- **Comprehensive Documentation**: Detailed usage examples and interactive tutorials
+
+---
 
 ## Installation
 
-### From PyPI (Recommended)
+### Create Environment (Required for All Users)
+
+```bash
+conda env create -f environment.yml
+conda activate biobatchnet
+```
+
+### Install BioBatchNet
+
+**For Users (Recommended):**
 ```bash
 pip install biobatchnet
 ```
 
-### From Source
+**For Development:**
 ```bash
-git clone https://github.com/UoM-HealthAI/BioBatchNet
+git clone https://github.com/Manchester-HealthAI/BioBatchNet
 cd BioBatchNet
 pip install -e .
 ```
 
-### Prerequisites
-```bash
-conda create -n biobatchnet python=3.10
-conda activate biobatchnet
-pip install torch numpy pandas anndata
-```
+---
 
-## Quick Start
+## Usage
 
-### Basic Usage
+### Python API (Recommended for Users)
+
+The simplest way to use BioBatchNet is through the high-level API:
 
 ```python
-import biobatchnet
-from biobatchnet import correct_batch_effects
+import pandas as pd
+import numpy as np
 import anndata as ad
+from biobatchnet import correct_batch_effects
 
 # Load your data
 adata = ad.read_h5ad('your_data.h5ad')
-X = adata.X
-batch_labels = adata.obs['batch'].values
+X = adata.X.toarray() if hasattr(adata.X, 'toarray') else adata.X
 
-# Correct batch effects; returns (bio_embeddings, batch_embeddings)
+# Prepare batch labels (must be integers)
+unique_batches = np.unique(adata.obs['BATCH'].values)
+batch_to_int = {batch: i for i, batch in enumerate(unique_batches)}
+batch_labels = np.array([batch_to_int[b] for b in adata.obs['BATCH'].values])
+
+# Correct batch effects
 bio_embeddings, batch_embeddings = correct_batch_effects(
-    data=X,
-    batch_info=batch_labels,
-    data_type='imc',  # or 'scrna' for single-cell RNA-seq
-    epochs=100
+    data=pd.DataFrame(X),
+    batch_info=pd.DataFrame({'BATCH': batch_labels}),
+    batch_key='BATCH',
+    data_type='imc',        # 'imc' or 'scrna'
+    latent_dim=20,
+    epochs=100,
+    device='cuda'           # or 'cpu'
 )
 
-# Add embeddings to AnnData (recommended usage)
+# Add embeddings to AnnData
 adata.obsm['X_biobatchnet'] = bio_embeddings
-adata.obsm['X_batch'] = batch_embeddings
-
-# Checkpoint storage: by default, training artefacts are written to a temporary
-# directory and deleted automatically. To keep checkpoints, pass
-# save_dir='path/to/output'.
 ```
 
-## Advanced Usage
+**For detailed documentation and examples:**
+- 📖 **[USAGE.md](USAGE.md)** - Complete API documentation and parameter guide
+- 📓 **[tutorial.ipynb](tutorial.ipynb)** - Interactive tutorial with three usage patterns
 
-### Custom Loss Weights
+### Config-based Training (For Development/Research)
 
-For IMC data with specific batch characteristics:
+For reproducing research results or training with specific configurations:
 
-```python
-# Define custom loss weights
-loss_weights = {
-    'recon_loss': 10,        # Reconstruction loss weight
-    'discriminator': 0.3,    # Adversarial loss weight
-    'classifier': 1,         # Batch classifier loss weight
-    'mmd_loss_1': 0,        # MMD loss weight
-    'kl_loss_1': 0.005,     # KL divergence weight for bio encoder
-    'kl_loss_2': 0.1,       # KL divergence weight for batch encoder
-    'ortho_loss': 0.01      # Orthogonality loss weight
-}
-
-bio_embeddings, batch_embeddings = correct_batch_effects(
-    data=X,
-    batch_info=batch_labels,
-    data_type='imc',
-    latent_dim=20,
-    epochs=100,
-    loss_weights=loss_weights
-)
-```
-
-### Custom Architecture Parameters
-
-Fine-tune the neural network architecture:
-
-```python
-bio_embeddings, batch_embeddings = correct_batch_effects(
-    data=X,
-    batch_info=batch_labels,
-    data_type='imc',
-    latent_dim=20,
-    epochs=100,
-    bio_encoder_hidden_layers=[500, 2000, 2000],
-    batch_encoder_hidden_layers=[500],
-    decoder_hidden_layers=[2000, 2000, 500],
-    batch_classifier_layers_power=[500, 2000, 2000],
-    batch_classifier_layers_weak=[128]
-)
-```
-
-### Direct Model Access
-
-For more control, use the models directly:
-
-```python
-from biobatchnet import IMCVAE, GeneVAE
-
+```bash
 # For IMC data
-model = IMCVAE(
-    in_sz=40,           # Number of features
-    out_sz=40,          # Output dimension
-    num_batch=4,        # Number of batches
-    latent_sz=20,       # Latent dimension
-    bio_encoder_hidden_layers=[500, 2000, 2000],
-    batch_encoder_hidden_layers=[500],
-    decoder_hidden_layers=[2000, 2000, 500],
-    batch_classifier_layers_power=[500, 2000, 2000],
-    batch_classifier_layers_weak=[128]
-)
+python biobatchnet/IMC.py --config biobatchnet/config/IMC/IMMUcan.yaml
 
-# Train the model
-model.fit(data, batch_labels, epochs=100, lr=1e-3)
-
-# Get biological embeddings (batch-corrected representations)
-bio_embeddings = model.get_bio_embeddings(data)
-
-# Get corrected data
-corrected_data = model.correct_batch_effects(data)
+# For scRNA-seq data
+python biobatchnet/Gene.py --config biobatchnet/config/scRNA/pancreas.yaml
 ```
 
-## Data Formats
+**Configuration files:**
+- IMC datasets: `biobatchnet/config/IMC/`
+- scRNA-seq datasets: `biobatchnet/config/scRNA/`
 
-### Config-Driven Training Scripts
+These scripts expect datasets under `Data/` directory (see YAML files for exact paths).
 
-Scripts such as `biobatchnet/imc.py` and `biobatchnet/scrna.py` reproduce our research training pipeline. They expect the original datasets to be placed under `Data/...` (see config YAMLs for paths) and are not included in the pip distribution. For typical usage please prefer the Python API or model classes above.
+---
 
-### Input Data Requirements
+## CPC Usage
 
-1. **Data Matrix**: 
-   - NumPy array or PyTorch tensor
-   - Shape: (n_cells, n_features)
-   - For IMC: Antibody expression matrix
+To use CPC, ensure you are running in the same environment as BioBatchNet.
 
-2. **Batch Information**:
-   - NumPy array or list
-   - Can be string labels (e.g., ['Patient1', 'Patient2']) or numeric
-   - Length must match number of cells
+All experiment results can be found in the following directory:
 
-### Output
-
-- **Corrected Data**: Same shape as input, with batch effects removed
-- **Bio Embeddings**: Low-dimensional biological representations (n_cells, latent_dim)
-
-## Recommended Parameters
-
-### For IMC Data
-
-```python
-# Small dataset (< 10 batches)
-loss_weights = {
-    'recon_loss': 10,
-    'discriminator': 0.3,
-    'classifier': 1,
-    'mmd_loss_1': 0,
-    'kl_loss_1': 0.005,
-    'kl_loss_2': 0.1,
-    'ortho_loss': 0.01
-}
-
-# Large dataset (> 30 batches)
-loss_weights = {
-    'recon_loss': 10,
-    'discriminator': 0.1,
-    'classifier': 1,
-    'mmd_loss_1': 0.01,
-    'kl_loss_1': 0.0,
-    'kl_loss_2': 0.1,
-    'ortho_loss': 0.01
-}
+```bash
+cd CPC/IMC_experiment
 ```
 
-## Example Workflow
+**✅ Key Notes:**
+- CPC requires embeddings from BioBatchNet as input
+- Sample data includes batch-corrected IMMUcan IMC embeddings
+- Ensure the same computational environment as BioBatchNet before running CPC
 
-```python
-import biobatchnet
-import anndata as ad
-import numpy as np
-from biobatchnet import correct_batch_effects
+---
 
-# 1. Load data
-adata = ad.read_h5ad('IMMUcan_batch.h5ad')
-print(f"Data shape: {adata.shape}")
-print(f"Batches: {adata.obs['BATCH'].unique()}")
+## Data
 
-# 2. Prepare data
-X = adata.X
-batch_labels = adata.obs['BATCH'].values
+**Download scRNA-seq Data:**
+- Available on Google Drive: [Download Link](https://drive.google.com/drive/folders/1m4AkNc_KMadp7J_lL4jOQj9DdyKutEZ5?usp=drive_link)
 
-# Convert categorical to numpy array if needed
-if hasattr(batch_labels, 'to_numpy'):
-    batch_labels = batch_labels.to_numpy()
+**Download IMC Data:**
 
-# 3. Correct batch effects
-corrected = correct_batch_effects(
-    data=X,
-    batch_info=batch_labels,
-    data_type='imc',
-    latent_dim=20,
-    epochs=100
-)
+The IMC dataset can be accessed from the Bodenmiller Group IMC datasets repository. Visit the link below to explore and download the datasets:
 
-# 4. Store results
-adata.layers['corrected'] = corrected
+🔗 [IMC Datasets - Bodenmiller Group](https://github.com/BodenmillerGroup/imcdatasets)
 
-# 5. Optional: Get embeddings for visualization
-from biobatchnet import IMCVAE
-model = IMCVAE(
-    in_sz=X.shape[1],
-    out_sz=X.shape[1],
-    num_batch=len(np.unique(batch_labels)),
-    latent_sz=20
-)
-model.fit(X, batch_labels, epochs=100)
-embeddings = model.get_bio_embeddings(X)
-adata.obsm['X_biobatchnet'] = embeddings
-
-# 6. Visualize results (using scanpy)
-import scanpy as sc
-sc.pp.neighbors(adata, use_rep='X_biobatchnet')
-sc.tl.umap(adata)
-sc.pl.umap(adata, color=['BATCH', 'celltype'])
-```
-
-## IMC Training Tips and Best Practices
-
-1. **Data Preprocessing**: 
-   - For IMC: post-processing is typically unnecessary.
-
-2. **Batch Size**:
-   - Default batch size is 256
-   - Reduce if encountering memory issues
-
-3. **Number of Epochs**:
-   - Start with 100 epochs for initial testing
-   - Monitor loss convergence
-
-4. **Latent Dimension**:
-   - Default is 20
-   - Increase for complex datasets with many cell types
-   - Decrease for simpler datasets
-
-## Troubleshooting
-
-### NAN Issues
-```python
-# Use smaller learning rate
-model.fit(data, batch_labels, lr=1e-4)  # Lower learning rate
-```
-
-
-## Features
-- **Multi-modal Support**: Works with both scRNA-seq and IMC data
-- **Easy-to-Use API**: One-line batch correction function
-- **Flexible Architecture**: Customizable neural network parameters
-- **Adaptive Loss Weights**: Automatically adjusts based on dataset characteristics
-- **Comprehensive Documentation**: Detailed usage examples and best practices
+---
 
 ## Citation
 
 If you use BioBatchNet in your research, please cite:
 
 ```
-Liu H, Zhang S, Mao S, et al. BioBatchNet: A Dual-Encoder Framework for Robust Batch Effect Correction in Imaging Mass Cytometry[J]. bioRxiv, 2025: 2025.03. 15.643447.
+Liu H, Zhang S, Mao S, et al. BioBatchNet: A Dual-Encoder Framework for Robust Batch Effect Correction in Imaging Mass Cytometry[J]. bioRxiv, 2025: 2025.03.15.643447.
 ```
+
+---
 
 ## License
 
