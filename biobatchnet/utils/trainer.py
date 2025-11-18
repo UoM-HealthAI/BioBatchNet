@@ -184,6 +184,8 @@ class Trainer:
                 'kl_loss_2': kl_loss_2.item(),
                 'ortho_loss': ortho_loss_value.item(),
             }
+            if mode == 'rna':
+                losses['kl_loss_size'] = (self.loss_weights['kl_loss_size'] * kl_loss_size).item()
             self.metric_tracker.update_batch(losses, count=data.size(0))
 
             # Accuracy calculation

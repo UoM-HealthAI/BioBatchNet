@@ -49,7 +49,7 @@ class IMCVAE(nn.Module):
 
         return bio_z, mu1, logvar1, batch_z, batch_mu, batch_logvar, bio_batch_pred, batch_batch_pred, reconstruction
     
-    def fit(self, data, batch_info, epochs=100, lr=1e-4, batch_size=256, loss_weights=None, device='cuda', save_dir=None):
+    def fit(self, data, batch_info, epochs=100, lr=1e-3, batch_size=256, loss_weights=None, device='cuda', save_dir=None):
         # Set device
         if device == 'cuda' and not torch.cuda.is_available():
             device = 'cpu'
@@ -137,7 +137,8 @@ class IMCVAE(nn.Module):
             bio_z, _, _ = self.bio_encoder(data)
             batch_z, _, _ = self.batch_encoder(data)
             return bio_z.cpu().numpy(), batch_z.cpu().numpy()
-        
+
+
 class GeneVAE(nn.Module):
     def __init__(self, **args):
         super(GeneVAE, self).__init__()
