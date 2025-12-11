@@ -104,6 +104,42 @@ class Config:
             trainer=TrainerConfig(**trainer_dict) if trainer_dict else TrainerConfig(),
         )
 
+    @classmethod
+    def from_preset(cls, dataset: str) -> 'Config':
+        """Load configuration from preset for a specific dataset.
+
+        Args:
+            dataset: Dataset name, e.g., 'damond', 'pancreas', 'mousebrain'
+        """
+        presets_path = Path(__file__).parent / 'presets.yaml'
+        with open(presets_path, 'r') as f:
+            presets = yaml.safe_load(f)
+
+        # Find dataset in presets
+        preset = None
+        mode = None
+        for m in ['imc', 'rna']:
+            if dataset in presets.get(m, {}):
+                preset = presets[m][dataset]
+                mode = m
+                break
+
+        if preset is None:
+            available = []
+            for m in ['imc', 'rna']:
+                available.extend(presets.get(m, {}).keys())
+            raise ValueError(f"Dataset '{dataset}' not found. Available: {available}")
+
+        model_dict = preset.get('model', {})
+        loss_dict = preset.get('loss', {})
+
+        return cls(
+            name=dataset,
+            mode=mode,
+            model=ModelConfig(**{**ModelConfig().__dict__, **model_dict}),
+            loss=LossConfig(**{**LossConfig().__dict__, **loss_dict}),
+        )
+
     def to_yaml(self, yaml_path: str):
         """Save configuration to YAML file."""
         config_dict = {
