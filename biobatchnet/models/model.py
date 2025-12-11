@@ -3,9 +3,43 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+from dataclasses import dataclass
 
 from .layers import Encoder, Decoder, Classifier, GRL
 from ..config import Config, ModelConfig
+
+
+@dataclass
+class IMCVAEOutput:
+    """Output of IMCVAE forward pass."""
+    bio_z: torch.Tensor
+    bio_mu: torch.Tensor
+    bio_logvar: torch.Tensor
+    batch_z: torch.Tensor
+    batch_mu: torch.Tensor
+    batch_logvar: torch.Tensor
+    bio_batch_pred: torch.Tensor
+    batch_batch_pred: torch.Tensor
+    reconstruction: torch.Tensor
+
+
+@dataclass
+class GeneVAEOutput:
+    """Output of GeneVAE forward pass."""
+    bio_z: torch.Tensor
+    bio_mu: torch.Tensor
+    bio_logvar: torch.Tensor
+    batch_z: torch.Tensor
+    batch_mu: torch.Tensor
+    batch_logvar: torch.Tensor
+    bio_batch_pred: torch.Tensor
+    batch_batch_pred: torch.Tensor
+    mean: torch.Tensor
+    disp: torch.Tensor
+    pi: torch.Tensor
+    size_factor: torch.Tensor
+    size_mu: torch.Tensor
+    size_logvar: torch.Tensor
 
 
 class IMCVAE(nn.Module):
@@ -49,17 +83,17 @@ class IMCVAE(nn.Module):
         # Reconstruction
         reconstruction = self.decoder(z_combine)
 
-        return {
-            'bio_z': bio_z,
-            'bio_mu': bio_mu,
-            'bio_logvar': bio_logvar,
-            'batch_z': batch_z,
-            'batch_mu': batch_mu,
-            'batch_logvar': batch_logvar,
-            'bio_batch_pred': bio_batch_pred,
-            'batch_batch_pred': batch_batch_pred,
-            'reconstruction': reconstruction,
-        }
+        return IMCVAEOutput(
+            bio_z=bio_z,
+            bio_mu=bio_mu,
+            bio_logvar=bio_logvar,
+            batch_z=batch_z,
+            batch_mu=batch_mu,
+            batch_logvar=batch_logvar,
+            bio_batch_pred=bio_batch_pred,
+            batch_batch_pred=batch_batch_pred,
+            reconstruction=reconstruction,
+        )
 
     def get_embeddings(self, data):
         """Get bio and batch embeddings."""
@@ -135,22 +169,22 @@ class GeneVAE(nn.Module):
         pi = self.dropout_decoder(h)
         pi = torch.clamp(pi, 1e-6, 1.0 - 1e-6)
 
-        return {
-            'bio_z': bio_z,
-            'bio_mu': bio_mu,
-            'bio_logvar': bio_logvar,
-            'batch_z': batch_z,
-            'batch_mu': batch_mu,
-            'batch_logvar': batch_logvar,
-            'bio_batch_pred': bio_batch_pred,
-            'batch_batch_pred': batch_batch_pred,
-            'mean': mean,
-            'disp': disp,
-            'pi': pi,
-            'size_factor': size_factor,
-            'size_mu': size_mu,
-            'size_logvar': size_logvar,
-        }
+        return GeneVAEOutput(
+            bio_z=bio_z,
+            bio_mu=bio_mu,
+            bio_logvar=bio_logvar,
+            batch_z=batch_z,
+            batch_mu=batch_mu,
+            batch_logvar=batch_logvar,
+            bio_batch_pred=bio_batch_pred,
+            batch_batch_pred=batch_batch_pred,
+            mean=mean,
+            disp=disp,
+            pi=pi,
+            size_factor=size_factor,
+            size_mu=size_mu,
+            size_logvar=size_logvar,
+        )
 
     def get_embeddings(self, data):
         """Get bio and batch embeddings."""

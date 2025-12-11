@@ -131,23 +131,23 @@ class Trainer:
 
             # Reconstruction loss
             if self.mode == 'imc':
-                recon_loss = self.mse_loss(data, out['reconstruction'])
+                recon_loss = self.mse_loss(data, out.reconstruction)
             else:
-                recon_loss = self.zinb_loss(data, out['mean'], out['disp'], out['pi'])
+                recon_loss = self.zinb_loss(data, out.mean, out.disp, out.pi)
 
             # KL losses
-            kl_bio = kl_divergence(out['bio_mu'], out['bio_logvar']).mean()
-            kl_batch = kl_divergence(out['batch_mu'], out['batch_logvar']).mean()
+            kl_bio = kl_divergence(out.bio_mu, out.bio_logvar).mean()
+            kl_batch = kl_divergence(out.batch_mu, out.batch_logvar).mean()
             kl_size = 0
             if self.mode == 'rna':
-                kl_size = kl_divergence(out['size_mu'], out['size_logvar']).mean()
+                kl_size = kl_divergence(out.size_mu, out.size_logvar).mean()
 
             # Classification losses
-            disc_loss = self.ce_loss(out['bio_batch_pred'], batch_id)
-            clf_loss = self.ce_loss(out['batch_batch_pred'], batch_id)
+            disc_loss = self.ce_loss(out.bio_batch_pred, batch_id)
+            clf_loss = self.ce_loss(out.batch_batch_pred, batch_id)
 
             # Orthogonal loss
-            ortho_loss = orthogonal_loss(out['bio_z'], out['batch_z'])
+            ortho_loss = orthogonal_loss(out.bio_z, out.batch_z)
 
             # Total loss
             lw = self.loss_weights
@@ -176,8 +176,8 @@ class Trainer:
             }, count=data.size(0))
 
             # Accuracy
-            total_correct_bio += (out['bio_batch_pred'].argmax(1) == batch_id).sum().item()
-            total_correct_batch += (out['batch_batch_pred'].argmax(1) == batch_id).sum().item()
+            total_correct_bio += (out.bio_batch_pred.argmax(1) == batch_id).sum().item()
+            total_correct_batch += (out.batch_batch_pred.argmax(1) == batch_id).sum().item()
             total_samples += batch_id.size(0)
 
         self.scheduler.step()
@@ -209,8 +209,8 @@ class Trainer:
                 data = data.to(self.device)
                 out = self.model(data)
 
-                all_bio_z.append(out['bio_z'].cpu().numpy())
-                all_batch_z.append(out['batch_z'].cpu().numpy())
+                all_bio_z.append(out.bio_z.cpu().numpy())
+                all_batch_z.append(out.batch_z.cpu().numpy())
                 all_batch_ids.append(batch_id.numpy())
                 all_cell_types.append(cell_type.numpy())
 
