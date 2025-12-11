@@ -36,8 +36,6 @@ class EarlyStopping:
 
 
 class Trainer:
-    """Trainer for VAE models."""
-
     def __init__(
         self,
         config: Config,

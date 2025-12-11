@@ -39,7 +39,7 @@ class ResBlock(nn.Module):
 
 class Encoder(nn.Module):
     """VAE encoder, returns (z, mu, logvar)."""
-    def __init__(self, layer_sizes, dropout=0.3):
+    def __init__(self, layer_sizes, dropout=0.1):
         super().__init__()
         layers = []
         for i in range(len(layer_sizes) - 1):
@@ -64,8 +64,7 @@ class Encoder(nn.Module):
 
 
 class Decoder(nn.Module):
-    """Decoder network."""
-    def __init__(self, layer_sizes, dropout=0.3):
+    def __init__(self, layer_sizes, dropout=0.1):
         super().__init__()
         layers = []
         for i in range(len(layer_sizes) - 1):
@@ -77,8 +76,7 @@ class Decoder(nn.Module):
 
 
 class Classifier(nn.Module):
-    """Classifier network."""
-    def __init__(self, layer_sizes, dropout=0.3):
+    def __init__(self, layer_sizes, dropout=0.1):
         super().__init__()
         layers = []
         for i in range(len(layer_sizes) - 1):

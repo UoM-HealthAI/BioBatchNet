@@ -20,7 +20,6 @@ csf_log/
 Logs/
 Results/
 bash/
-Evaluation/
 saved/
 wandb/
 BaselineResults/

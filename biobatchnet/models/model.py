@@ -9,8 +9,7 @@ from ..config import Config, ModelConfig
 
 
 class IMCVAE(nn.Module):
-    """VAE for IMC data batch effect correction."""
-
+    """VAE for IMC data batch effect correction using MSE reconstruction."""
     def __init__(self, config: ModelConfig):
         super().__init__()
         self.config = config
@@ -77,7 +76,6 @@ class IMCVAE(nn.Module):
 
 class GeneVAE(nn.Module):
     """VAE for scRNA-seq data batch effect correction with ZINB decoder."""
-
     def __init__(self, config: ModelConfig):
         super().__init__()
         self.config = config
