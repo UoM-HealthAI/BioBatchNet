@@ -1,2 +1,3 @@
-"""Configuration subpackage (YAML configs included as package data)."""
+"""Configuration subpackage."""
+from .config import Config, ModelConfig, LossConfig, TrainerConfig
 

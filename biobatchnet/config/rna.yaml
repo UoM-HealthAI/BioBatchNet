@@ -1,0 +1,17 @@
+_base_: base.yaml
+name: rna_experiment
+mode: rna
+
+model:
+  in_sz: 2000
+  out_sz: 2000
+  num_batch: 5
+
+loss:
+  recon: 10.0
+  discriminator: 0.04
+  classifier: 1.0
+  kl_bio: 0.0000001
+  kl_batch: 0.01
+  ortho: 0.0002
+  kl_size: 0.002

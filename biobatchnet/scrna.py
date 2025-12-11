@@ -20,6 +20,7 @@ def main(config):
     device, _ = prepare_device(config['n_gpu'])
 
     all_evaluation_results = []
+    
     for seed in config['train_seed_list']:
         set_random_seed(seed)
         biobatchnet = config.init_obj('arch', model)

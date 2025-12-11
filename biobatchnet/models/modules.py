@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 
+
 class GradientReversalLayer(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, alpha=1):

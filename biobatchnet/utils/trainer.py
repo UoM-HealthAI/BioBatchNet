@@ -1,391 +1,254 @@
+"""Trainer for batch effect correction models."""
+import torch
 import torch.nn as nn
 import numpy as np
-import torch
+import logging
 from pathlib import Path
-import torch.nn.functional as F
 from tqdm import tqdm
 import scanpy as sc
 import pandas as pd
-from .util import visualization
+
+from .util import visualization, MetricTracker
 from .loss import kl_divergence, orthogonal_loss, ZINBLoss
-from .util import MetricTracker
 from .evaluation import evaluate_nn
+from ..config import Config
 
 
 class EarlyStopping:
-    def __init__(self, patience=10, delta_ratio=0.000):
+    """Early stopping handler."""
+    def __init__(self, patience=10):
         self.patience = patience
-        self.delta_ratio = delta_ratio
-        self.best_loss = 1e10
+        self.best_loss = float('inf')
         self.counter = 0
         self.early_stop = False
-        self.best_epoch = 0  
+        self.best_epoch = 0
 
-    def step(self, current_loss, epoch):
-        delta = self.best_loss * self.delta_ratio
-        if current_loss < self.best_loss - delta:
-            self.best_loss = current_loss
+    def step(self, loss, epoch):
+        if loss < self.best_loss:
+            self.best_loss = loss
             self.best_epoch = epoch
             self.counter = 0
-            return True  
-        else:
-            self.counter += 1
-            if self.counter >= self.patience:
-                self.early_stop = True
-            return False  
+            return True
+        self.counter += 1
+        if self.counter >= self.patience:
+            self.early_stop = True
+        return False
+
 
 class Trainer:
-    def __init__(self, config, model, optimizer, train_dataloader, eval_dataloader, scheduler, device, seed):
+    """Trainer for VAE models."""
+
+    def __init__(
+        self,
+        config: Config,
+        model: nn.Module,
+        train_dataloader,
+        eval_dataloader=None,
+        device='cuda',
+    ):
         self.config = config
-        self.model = model
-        self.optimizer = optimizer
+        self.model = model.to(device)
         self.train_dataloader = train_dataloader
-        self.eval_dataloader = eval_dataloader
-        self.dataset_name = self.config['name']
-
+        self.eval_dataloader = eval_dataloader or train_dataloader
         self.device = device
-        self.scheduler = scheduler
-        self.seed = seed
-        self.eval_sampling_seed = self.config['eval_sampling_seed']
 
-        self.cfg_trainer = self.config['trainer']
-        self.epochs = self.cfg_trainer['epochs']
-        self.save_period = self.cfg_trainer['save_period']
-        self.if_imc = self.cfg_trainer['if_imc']
-        self.loss_weights = self.config['loss_weights']
-        self.early_stopping = EarlyStopping(patience=self.cfg_trainer['early_stop'])
+        # Training config
+        tc = config.trainer
+        self.epochs = tc.epochs
+        self.early_stopping = EarlyStopping(patience=tc.early_stop)
 
-        self.sampling_fraction = self.cfg_trainer['sampling_fraction'][self.dataset_name]
-        self.logger = self.config.get_logger('trainer', self.config['trainer']['verbosity'])
- 
-        self.mse_recon = nn.MSELoss()
-        self.zinb_recon = ZINBLoss().cuda()
-        self.criterion_classification = nn.CrossEntropyLoss()
-
-        self.metric_tracker = MetricTracker(
-            'total_loss', 'recon_loss', 'batch_loss_z1', 'batch_loss_z2',
-            'kl_loss_1', 'kl_loss_2', 'ortho_loss',
+        # Optimizer and scheduler
+        self.optimizer = torch.optim.Adam(
+            model.parameters(),
+            lr=tc.lr,
+            weight_decay=tc.weight_decay,
+        )
+        self.scheduler = torch.optim.lr_scheduler.StepLR(
+            self.optimizer,
+            step_size=tc.scheduler_step,
+            gamma=tc.scheduler_gamma,
         )
 
-        # Base directory for saving all checkpoints and results
-        self.base_checkpoint_dir = self.config.save_dir
-        self.checkpoint_dir = None  # Will be updated for each seed training
+        # Loss functions
+        self.mse_loss = nn.MSELoss()
+        self.zinb_loss = ZINBLoss().to(device)
+        self.ce_loss = nn.CrossEntropyLoss()
+
+        # Loss weights
+        self.loss_weights = config.loss
+
+        # Checkpointing
+        self.save_dir = Path(tc.save_dir) / config.name / f'seed_{config.seed}'
+        self.save_dir.mkdir(parents=True, exist_ok=True)
+
+        # Logging
+        self.logger = logging.getLogger('trainer')
+        self.logger.setLevel(logging.INFO)
+        if not self.logger.handlers:
+            handler = logging.StreamHandler()
+            handler.setFormatter(logging.Formatter('%(message)s'))
+            self.logger.addHandler(handler)
+
+        # Mode
+        self.mode = config.mode  # 'imc' or 'rna'
+
+        # Metrics
+        self.metric_tracker = MetricTracker(
+            'total_loss', 'recon_loss', 'disc_loss', 'clf_loss',
+            'kl_bio', 'kl_batch', 'ortho_loss',
+        )
 
     def train(self):
-        """
-        Main training loop that handles multiple seeds.
-            For each seed:
-            1. Creates a dedicated directory
-            2. Runs training and evaluation
-            3. Saves checkpoints and results
-            4. umap visualization
-            Finally combines results from all seeds.
-        """
-        # Create dedicated directory for this seed
-        self.checkpoint_dir = self.base_checkpoint_dir / f'seed_{self.seed}'
-        self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
-            
-        # Training loop for current seed
+        """Main training loop."""
         for epoch in tqdm(range(1, self.epochs + 1)):
-            current_train_loss = self._train_epoch(epoch, mode='imc' if self.if_imc else 'rna')  
-            improved = self.early_stopping.step(current_train_loss, epoch)
-            
+            loss = self._train_epoch(epoch)
+            improved = self.early_stopping.step(loss, epoch)
+
             if improved:
-                self._save_best_checkpoint(epoch)
-                self.logger.info(f"New best loss: {self.early_stopping.best_loss:.4f} at epoch {epoch}")
+                self._save_checkpoint(epoch, best=True)
+                self.logger.info(f"Best loss: {loss:.4f} at epoch {epoch}")
 
             if self.early_stopping.early_stop:
-                self.logger.info(f"Early stopping triggered at epoch {epoch}.")
+                self.logger.info(f"Early stopping at epoch {epoch}")
                 break
 
-            if epoch % 5 == 0:
-                evaluation_results = self._evaluate_epoch(epoch, sampling_fraction=0.3*self.sampling_fraction)
-                # Log evaluation results without wandb
-                self.logger.info(f"epoch {epoch} evaluation results: {evaluation_results}")    
-                    
-            # if epoch % self.save_period == 0:
-            #     self._save_checkpoint(epoch)
+        self._load_best_checkpoint()
 
-        # Load best model for final evaluation
-        self._load_best_model()
-        
-        # Skip final evaluation for API usage
-        if self.config.config.get('trainer', {}).get('skip_intermediate_eval', False):
-            evaluation_results = {}
-            self.logger.info(f"Skipping final evaluation for API usage")
-        else:
-            evaluation_results = self._evaluate_epoch(epoch, sampling_fraction=self.sampling_fraction)
-            self.logger.info(f"Evaluation results after training with seed {self.seed}: {evaluation_results}")
-            
-            # Save evaluation results for current seed
-            results_df = pd.DataFrame(evaluation_results)
-            results_df.to_csv(self.checkpoint_dir / f'seed_{self.seed}_evaluation_result.csv', index=True)
-
-         
-        return evaluation_results
-    
-    def _train_epoch(self, epoch, mode):
-        self.metric_tracker.reset()
+    def _train_epoch(self, epoch):
+        """Train for one epoch."""
         self.model.train()
+        self.metric_tracker.reset()
 
-        total_correct_z1 = 0
-        total_correct_z2 = 0
+        total_correct_bio = 0
+        total_correct_batch = 0
         total_samples = 0
 
         for data, batch_id in self.train_dataloader:
-            data, batch_id = data.to(self.device), batch_id.to(self.device)
+            data = data.to(self.device)
+            batch_id = batch_id.to(self.device)
             self.optimizer.zero_grad()
 
-            # forward pass and reconstrution loss
-            if mode == 'imc':
-                bio_z, bio_mu, bio_logvar, batch_z, batch_mu, batch_logvar, bio_batch_pred, batch_batch_pred, reconstruction = self.model(data)
-                recon_loss = self.mse_recon(data, reconstruction)
+            # Forward
+            out = self.model(data)
+
+            # Reconstruction loss
+            if self.mode == 'imc':
+                recon_loss = self.mse_loss(data, out['reconstruction'])
             else:
-                bio_z, bio_mu, bio_logvar, batch_z, batch_mu, batch_logvar, bio_batch_pred, batch_batch_pred, _mean, _disp, _pi, size_factor, size_mu, size_logvar = self.model(data)
-                recon_loss = self.zinb_recon(data, _mean, _disp, _pi)
-            
-            # bio kl loss
-            kl_loss_1 = kl_divergence(bio_mu, bio_logvar).mean()
+                recon_loss = self.zinb_loss(data, out['mean'], out['disp'], out['pi'])
 
-            # batch kl loss
-            kl_loss_2 = kl_divergence(batch_mu, batch_logvar).mean()
+            # KL losses
+            kl_bio = kl_divergence(out['bio_mu'], out['bio_logvar']).mean()
+            kl_batch = kl_divergence(out['batch_mu'], out['batch_logvar']).mean()
+            kl_size = 0
+            if self.mode == 'rna':
+                kl_size = kl_divergence(out['size_mu'], out['size_logvar']).mean()
 
-            # library size kl loss
-            kl_loss_size = kl_divergence(size_mu, size_logvar).mean() if mode == 'rna' else 0
+            # Classification losses
+            disc_loss = self.ce_loss(out['bio_batch_pred'], batch_id)
+            clf_loss = self.ce_loss(out['batch_batch_pred'], batch_id)
 
-            # discriminator loss            
-            batch_loss_z1 = self.criterion_classification(bio_batch_pred, batch_id)
-
-            # classifier loss
-            batch_loss_z2 = self.criterion_classification(batch_batch_pred, batch_id)
-            
             # Orthogonal loss
-            ortho_loss_value = orthogonal_loss(bio_z, batch_z)
+            ortho_loss = orthogonal_loss(out['bio_z'], out['batch_z'])
 
             # Total loss
-            loss = (self.loss_weights['recon_loss'] * recon_loss +
-                    self.loss_weights['discriminator'] * batch_loss_z1 +
-                    self.loss_weights['classifier'] * batch_loss_z2 +
-                    self.loss_weights['kl_loss_1'] * kl_loss_1 +
-                    self.loss_weights['kl_loss_2'] * kl_loss_2 +
-                    self.loss_weights['ortho_loss'] * ortho_loss_value +
-                    (self.loss_weights['kl_loss_size'] * kl_loss_size if mode == 'rna' else 0))
+            lw = self.loss_weights
+            loss = (
+                lw.recon * recon_loss +
+                lw.discriminator * disc_loss +
+                lw.classifier * clf_loss +
+                lw.kl_bio * kl_bio +
+                lw.kl_batch * kl_batch +
+                lw.ortho * ortho_loss +
+                (lw.kl_size * kl_size if self.mode == 'rna' else 0)
+            )
 
             loss.backward()
             self.optimizer.step()
 
-            # Update losses
-            losses = {
+            # Track metrics
+            self.metric_tracker.update_batch({
                 'total_loss': loss.item(),
                 'recon_loss': recon_loss.item(),
-                'batch_loss_z1': batch_loss_z1.item(),
-                'batch_loss_z2': batch_loss_z2.item(),
-                'kl_loss_1': kl_loss_1.item(),
-                'kl_loss_2': kl_loss_2.item(),
-                'ortho_loss': ortho_loss_value.item(),
-            }
-            if mode == 'rna':
-                losses['kl_loss_size'] = (self.loss_weights['kl_loss_size'] * kl_loss_size).item()
-            self.metric_tracker.update_batch(losses, count=data.size(0))
+                'disc_loss': disc_loss.item(),
+                'clf_loss': clf_loss.item(),
+                'kl_bio': kl_bio.item(),
+                'kl_batch': kl_batch.item(),
+                'ortho_loss': ortho_loss.item(),
+            }, count=data.size(0))
 
-            # Accuracy calculation
-            z1_pred = torch.argmax(bio_batch_pred, dim=1)
-            z2_pred = torch.argmax(batch_batch_pred, dim=1)
-
-            total_correct_z1 += (z1_pred == batch_id).sum().item()
-            total_correct_z2 += (z2_pred == batch_id).sum().item()
-
+            # Accuracy
+            total_correct_bio += (out['bio_batch_pred'].argmax(1) == batch_id).sum().item()
+            total_correct_batch += (out['batch_batch_pred'].argmax(1) == batch_id).sum().item()
             total_samples += batch_id.size(0)
+
         self.scheduler.step()
 
-        # Avg accuracy for epoch
-        z1_accuracy = total_correct_z1 / total_samples * 100
-        z2_accuracy = total_correct_z2 / total_samples * 100
-
-        # Log accuracies (without wandb)
-        # Could save to file or just use logger
+        avg_loss = self.metric_tracker.avg('total_loss')
+        bio_acc = total_correct_bio / total_samples * 100
+        batch_acc = total_correct_batch / total_samples * 100
 
         self.logger.info(
-            f"Epoch {epoch}: "
-            f"Loss = {self.metric_tracker.avg('total_loss'):.2f}, "
-            f"KL Loss = {self.metric_tracker.avg('kl_loss_1'):.2f}, "
-            f"Z1 Accuracy = {z1_accuracy:.2f}, "
-            f"Z2 Accuracy = {z2_accuracy:.2f}"
+            f"Epoch {epoch}: Loss={avg_loss:.2f}, "
+            f"BioAcc={bio_acc:.1f}%, BatchAcc={batch_acc:.1f}%"
         )
 
-        return self.metric_tracker.avg('total_loss')
+        return avg_loss
 
-    def _evaluate_epoch(self, epoch, sampling_fraction):
-        # Skip evaluation for API usage
-        if self.config.config.get('trainer', {}).get('skip_intermediate_eval', False):
-            return {}
-            
+    def evaluate(self, sampling_fraction=1.0):
+        """Evaluate model and return metrics."""
+        self.model.eval()
+        all_bio_z, all_batch_z, all_batch_ids, all_cell_types = [], [], [], []
+
         with torch.no_grad():
-            self.model.eval()
-
-            all_data, all_bio_z, all_batch_z, all_batch_ids, all_cell_types = [], [], [], [], []
-
-            for data, batch_id, cell_type in self.eval_dataloader:
-                data, batch_id = data.to(self.device), batch_id.to(self.device)
-
-                if self.if_imc:
-                    bio_z, _, _, batch_z, *_ = self.model(data)
+            for batch in self.eval_dataloader:
+                if len(batch) == 3:
+                    data, batch_id, cell_type = batch
                 else:
-                    bio_z, _, _, batch_z, *_ = self.model(data)
-                
-                all_data.append(data.cpu().numpy())
-                all_bio_z.append(bio_z.cpu().numpy())
-                all_batch_z.append(batch_z.cpu().numpy())
-                all_batch_ids.append(batch_id.cpu().numpy())
-                all_cell_types.append(cell_type.cpu().numpy())
+                    data, batch_id = batch
+                    cell_type = torch.zeros_like(batch_id)
 
-            # Convert lists to numpy arrays
-            raw_data = np.concatenate(all_data, axis=0)
-            bio_integrated_data = np.concatenate(all_bio_z, axis=0)
-            batch_integrated_data = np.concatenate(all_batch_z, axis=0)
-            batch_ids = np.concatenate(all_batch_ids, axis=0)
-            cell_types = np.concatenate(all_cell_types, axis=0)
+                data = data.to(self.device)
+                out = self.model(data)
 
-            # adata_unintegrated
-            adata_unintegrated = sc.AnnData(raw_data)
-            adata_unintegrated.obs['BATCH'] = pd.Categorical(batch_ids)
-            adata_unintegrated.obs['celltype'] = pd.Categorical(cell_types)
+                all_bio_z.append(out['bio_z'].cpu().numpy())
+                all_batch_z.append(out['batch_z'].cpu().numpy())
+                all_batch_ids.append(batch_id.numpy())
+                all_cell_types.append(cell_type.numpy())
 
-            # adata_bio (bio_z - biological features)
-            adata_bio = sc.AnnData(bio_integrated_data)
-            adata_bio.obs['BATCH'] = pd.Categorical(batch_ids)
-            adata_bio.obs['celltype'] = pd.Categorical(cell_types)
-            adata_bio.obsm['X_biobatchnet'] = bio_integrated_data
+        bio_z = np.concatenate(all_bio_z)
+        batch_z = np.concatenate(all_batch_z)
+        batch_ids = np.concatenate(all_batch_ids)
+        cell_types = np.concatenate(all_cell_types)
 
-            # adata_batch (batch_z - batch features)
-            adata_batch = sc.AnnData(batch_integrated_data)
-            adata_batch.obs['BATCH'] = pd.Categorical(batch_ids)
-            adata_batch.obs['celltype'] = pd.Categorical(cell_types)
-            adata_batch.obsm['X_batch'] = batch_integrated_data
+        # Create AnnData
+        adata = sc.AnnData(bio_z)
+        adata.obs['BATCH'] = pd.Categorical(batch_ids)
+        adata.obs['celltype'] = pd.Categorical(cell_types)
+        adata.obsm['X_biobatchnet'] = bio_z
 
-            # visualization
-            fig_save_dir = self.checkpoint_dir / 'fig'
-            fig_save_dir.mkdir(parents=True, exist_ok=True)  
-            
-            # Visualize bio_z (biological space)
-            visualization(fig_save_dir, adata_bio, 'X_biobatchnet', epoch)
-            
-            # Visualize batch_z (batch space)
-            visualization(fig_save_dir, adata_batch, 'X_batch', epoch)
-            
-            self.logger.info(f"figure saved at {fig_save_dir}")
+        return evaluate_nn(
+            {'biobatchnet': adata},
+            fraction=sampling_fraction,
+            seed=self.config.trainer.eval_seed,
+        )
 
-            adata_dict = {'Raw': adata_unintegrated, 'biobatchnet': adata_bio}
-            evaluation_results = evaluate_nn(adata_dict, fraction=sampling_fraction, seed=self.eval_sampling_seed)
-            
-            return evaluation_results
-    
-    def _save_checkpoint(self, epoch):
-        """
-        Save model checkpoint for current epoch in seed-specific directory.
-        
-        Args:
-            epoch (int): Current epoch number
-        """
-        arch = type(self.model).__name__
+    def _save_checkpoint(self, epoch, best=False):
+        """Save checkpoint."""
         state = {
-            'arch': arch,
             'epoch': epoch,
-            'state_dict': self.model.state_dict(),
-            'optimizer': self.optimizer.state_dict(),
+            'model_state': self.model.state_dict(),
+            'optimizer_state': self.optimizer.state_dict(),
             'config': self.config,
-            'loss_weights': self.loss_weights
-        }
-        
-        # Save checkpoint in seed-specific directory
-        filename = str(self.checkpoint_dir / f'checkpoint-epoch{epoch}.pth')
-        torch.save(state, filename)
-        self.logger.info(f"Saving checkpoint: {filename} ...")
-
-    def _resume_checkpoint(self, resume_path):
-        """
-        Resume from saved checkpoints
-
-        :param resume_path: Checkpoint path to be resumed
-        """
-        resume_path = str(resume_path)
-        self.logger.info("Loading checkpoint: {} ...".format(resume_path))
-        checkpoint = torch.load(resume_path, weights_only=False)
-        self.start_epoch = checkpoint['epoch'] + 1
-        self.mnt_best = checkpoint['monitor_best']
-
-        # load architecture params from checkpoint.
-        if checkpoint['config']['arch'] != self.config['arch']:
-            self.logger.warning("Warning: Architecture configuration given in config file is different from that of "
-                                "checkpoint. This may yield an exception while state_dict is being loaded.")
-        self.model.load_state_dict(checkpoint['state_dict'])
-
-        # load optimizer state from checkpoint only when optimizer type is not changed.
-        if checkpoint['config']['optimizer']['type'] != self.config['optimizer']['type']:
-            self.logger.warning("Warning: Optimizer type given in config file is different from that of checkpoint. "
-                                "Optimizer parameters not being resumed.")
-        else:
-            self.optimizer.load_state_dict(checkpoint['optimizer'])
-
-        self.logger.info("Checkpoint loaded. Resume training from epoch {}".format(self.start_epoch))
-
-    def _save_best_checkpoint(self, epoch):
-        """
-        Save the best model checkpoint.
-        """
-        arch = type(self.model).__name__
-        state = {
-            'arch': arch,
-            'epoch': epoch,
-            'state_dict': self.model.state_dict(),
-            'optimizer': self.optimizer.state_dict(),
-            'config': self.config,
-            'loss_weights': self.loss_weights,
             'best_loss': self.early_stopping.best_loss,
-            'best_epoch': self.early_stopping.best_epoch
         }
-        
-        best_filename = str(self.checkpoint_dir / 'best_model.pth')
-        torch.save(state, best_filename)
-        self.logger.info(f"Saved best model: {best_filename}")
+        filename = 'best_model.pth' if best else f'checkpoint-{epoch}.pth'
+        torch.save(state, self.save_dir / filename)
 
-    def _load_best_model(self):
-        """
-        Load the best model for final evaluation.
-        """
-        best_path = self.checkpoint_dir / 'best_model.pth'
-        if best_path.exists():
-            self.logger.info(f"Loading best model from {best_path}")
-            checkpoint = torch.load(best_path, weights_only=False)
-            self.model.load_state_dict(checkpoint['state_dict'])
-            self.logger.info(f"Loaded best model from epoch {checkpoint['best_epoch']} with loss: {checkpoint['best_loss']:.4f}")
-        else:
-            self.logger.warning("Best model not found, using current model for evaluation")
-
-    @staticmethod
-    def calculate_final_results(all_evaluation_results):
-        """Calculate mean and variance for all metrics across different seeds.
-        
-        Args:
-            all_evaluation_results: List of evaluation results from different seeds
-            
-        Returns:
-            Dictionary containing mean and variance for each metric
-        """
-        method = list(all_evaluation_results[0].keys())[0]  
-        metrics = all_evaluation_results[0][method].keys()  
-        
-        final_results = {method: {}}
-        
-        for metric in metrics:
-            values = [result[method][metric] for result in all_evaluation_results]
-            mean_value = np.mean(values)
-            std_value = np.std(values)
-            final_results[method][metric] = {
-                'mean': mean_value,
-                'std': std_value
-            }
-        
-        return final_results
-
-    
+    def _load_best_checkpoint(self):
+        """Load best checkpoint."""
+        path = self.save_dir / 'best_model.pth'
+        if path.exists():
+            ckpt = torch.load(path, weights_only=False)
+            self.model.load_state_dict(ckpt['model_state'])
+            self.logger.info(f"Loaded best model from epoch {ckpt['epoch']}")
