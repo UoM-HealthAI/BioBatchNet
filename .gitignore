@@ -40,6 +40,7 @@ __pycache__/
 
 # Ignore OS generated files
 .DS_Store
+CLAUDE.md
 Thumbs.db
 
 # Ignore IDE/editor configuration files
