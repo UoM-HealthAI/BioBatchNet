@@ -13,12 +13,9 @@ from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
 
 from .config import Config
-from .module import IMCModule, RNAModule
+from .module import IMCModule, SeqModule
 from .utils.dataset import BBNDataset
-from .utils.tools import load_preset, load_adata
-
-
-BASE_DIR = Path(__file__).resolve().parent.parent
+from .utils.tools import load_adata
 
 
 def train(config: Config, seed: int = 42):
@@ -26,12 +23,11 @@ def train(config: Config, seed: int = 42):
     config.seed = seed
 
     # Load data
-    preset = load_preset(config.name)
-    data_path = BASE_DIR / preset['data']
-    preprocess = config.data.preprocess if config.data.preprocess is not None else (config.mode == 'rna')
+    data_path = config.data.path
+    preprocess = config.data.preprocess if config.data.preprocess is not None else (config.mode == 'seq')
 
     data, batch_labels, cell_types = load_adata(
-        data_path,
+        str(data_path),
         data_type=config.mode,
         preprocess=preprocess,
         batch_key=config.data.batch_key,
@@ -47,7 +43,7 @@ def train(config: Config, seed: int = 42):
         persistent_workers=True,
     )
 
-    Module = IMCModule if config.mode == 'imc' else RNAModule
+    Module = IMCModule if config.mode == 'imc' else SeqModule
     model = Module(config)
 
     callbacks = [
@@ -81,18 +77,11 @@ def train(config: Config, seed: int = 42):
 
 def main():
     parser = argparse.ArgumentParser(description='BioBatchNet Training')
-    parser.add_argument('--preset', type=str, help='Dataset preset (damond, pancreas, etc.)')
-    parser.add_argument('--config', type=str, help='Path to config yaml file')
+    parser.add_argument('--config', type=str, required=True, help='Config YAML path or preset name')
     parser.add_argument('--seed', type=int, default=42, help='Random seed')
     args = parser.parse_args()
 
-    if args.preset:
-        config = Config.from_preset(args.preset)
-    elif args.config:
-        config = Config.from_yaml(args.config)
-    else:
-        parser.error('Either --preset or --config is required')
-
+    config = Config.load(args.config)
     train(config, args.seed)
 
 

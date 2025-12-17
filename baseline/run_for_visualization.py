@@ -12,7 +12,7 @@ class VisualizationRunner:
         """
         Initialize the VisualizationRunner
         :param adata: Original AnnData object
-        :param mode: Running mode ('rna' or 'imc')
+        :param mode: Running mode ('seq' or 'imc')
         :param seed: Random seed for reproducibility
         """
         self.adata = adata
@@ -181,7 +181,7 @@ def batch_visualization(dataset_configs, base_data_dir="../Data", base_save_dir=
             mode = config["mode"]
             if mode == 'imc':
                 adata_path = os.path.join(base_data_dir, "IMC", f"{dataset_name}.h5ad")
-            else:  # mode == 'rna'
+            else:  # mode == 'seq'
                 adata_path = os.path.join(base_data_dir, "scRNA-seq", f"{dataset_name}.h5ad")
             
             save_dir = os.path.join(base_save_dir, dataset_name)
@@ -238,7 +238,7 @@ def get_default_dataset_configs():
         
         # scRNA-seq datasets (available in Data/scRNA-seq/)
         'pancreas': {
-            "mode": "rna",
+            "mode": "seq",
             "run_baseline": True,
             "other_methods": {
                 'BioBatchNet': "pancreas_biobatchnet.h5ad",
@@ -247,7 +247,7 @@ def get_default_dataset_configs():
             }
         },
         'macaque': {
-            "mode": "rna",
+            "mode": "seq",
             "run_baseline": True,
             "other_methods": {
                 'BioBatchNet': "macaque_biobatchnet.h5ad",
@@ -257,7 +257,7 @@ def get_default_dataset_configs():
         },
 
         'mousebrain': {
-            "mode": "rna",
+            "mode": "seq",
             "run_baseline": True,
             "other_methods": {
                 'BioBatchNet': "mousebrain_biobatchnet.h5ad",
@@ -273,7 +273,7 @@ if __name__ == "__main__":
     single_config = {
         'adata_path': "../Data/scRNA-seq/pancreas.h5ad",
         'save_dir': "../Results/Visualization/pancreas",
-        'mode': "rna",
+        'mode': "seq",
         'other_methods_paths': {
             'BioBatchNet': "../Results/BioBatchNet/pancreas_biobatchnet.h5ad",
             'scDREAMER': "../Results/scDREAMER/pancreas_scdreamer.h5ad",

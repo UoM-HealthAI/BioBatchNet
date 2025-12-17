@@ -18,7 +18,7 @@ class RunBaseline:
         """
         self.raw_adata = adata.copy()
         self.mode = mode
-        self.process_adata = self.raw_adata if self.mode == 'imc' else self.rna_process(self.raw_adata)
+        self.process_adata = self.raw_adata if self.mode == 'imc' else self.seq_process(self.raw_adata)
 
         self.features = self.process_adata.X
         self.batch = pd.Categorical(self.process_adata.obs['BATCH'].values)
@@ -120,7 +120,7 @@ class RunBaseline:
         return self.timing_results
 
     @staticmethod
-    def rna_process(adata):
+    def seq_process(adata):
         if issparse(adata.X):
             adata.X = adata.X.toarray()
         else:

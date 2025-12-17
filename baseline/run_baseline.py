@@ -14,7 +14,7 @@ class BaselineEvaluator:
         """
         Initialize the BaselineEvaluator class.
         :param adata: Original AnnData object.
-        :param mode: Mode for running baseline (e.g., 'rna' or 'imc').
+        :param mode: Mode for running baseline (e.g., 'seq' or 'imc').
         :param sampling_fraction: Fraction of data to use for evaluation (default: 0.5)
         :param sampling_seed: Seed for sampling
         :param seed_list: List of random seeds for experiments.
@@ -204,19 +204,19 @@ if __name__ == "__main__":
             "seed_list": [42, 52, 62, 72, 82]
         },
         'pancreas':{
-            "mode": "rna",
+            "mode": "seq",
             "sampling_fraction": 1,
             "sampling_seed": 42,
             "seed_list": [42, 52, 62, 72, 82]
         },
         'macaque':{
-            "mode": "rna",
+            "mode": "seq",
             "sampling_fraction": 1,
             "sampling_seed": 42,
             "seed_list": [42, 52, 62, 72, 82]
         },
         'SubMouseBrain':{
-            "mode": "rna",
+            "mode": "seq",
             "sampling_fraction": 1,
             "sampling_seed": 42,
             "seed_list": [42, 52, 62, 72, 82]
@@ -232,7 +232,7 @@ if __name__ == "__main__":
         if mode == 'imc':
             adata_dir = f"../Data/IMC/h5ad_format/{data_name}.h5ad"
             save_dir = f"../Results/IMC/{data_name}"
-        elif mode == 'rna':
+        elif mode == 'seq':
             adata_dir = f"../Data/scRNA-seq/{data_name}.h5ad"
             save_dir = f"../Results/scRNA-seq/{data_name}"
 

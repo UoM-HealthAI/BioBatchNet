@@ -1,0 +1,92 @@
+damond:
+  mode: imc
+  data: Data/IMC/subDamond_full.h5ad
+  model:
+    in_sz: 38
+    out_sz: 38
+    num_batch: 12
+  loss:
+    recon: 10
+    discriminator: 0.3
+    classifier: 1
+    kl_bio: 0.001
+    kl_batch: 0.1
+    ortho: 0.01
+
+hoch:
+  mode: imc
+  data: Data/IMC/HochSchulz.h5ad
+  model:
+    in_sz: 41
+    out_sz: 41
+    num_batch: 39
+  loss:
+    recon: 10
+    discriminator: 0.1
+    classifier: 1
+    kl_bio: 0.0
+    kl_batch: 0.1
+    ortho: 0.01
+
+immuncan:
+  mode: imc
+  data: Data/IMC/IMMUcan_batch.h5ad
+  model:
+    in_sz: 40
+    out_sz: 40
+    num_batch: 4
+  loss:
+    recon: 10
+    discriminator: 0.3
+    classifier: 1
+    kl_bio: 0.005
+    kl_batch: 0.1
+    ortho: 0.01
+
+pancreas:
+  mode: seq
+  data: Data/scRNA-seq/pancreas.h5ad
+  model:
+    in_sz: 2000
+    out_sz: 2000
+    num_batch: 8
+  loss:
+    recon: 10
+    discriminator: 0.04
+    classifier: 1
+    kl_bio: 0.0000001
+    kl_batch: 0.01
+    ortho: 0.0002
+    kl_size: 0.002
+
+macaque:
+  mode: seq
+  data: Data/scRNA-seq/macaque.h5ad
+  model:
+    in_sz: 2000
+    out_sz: 2000
+    num_batch: 4
+  loss:
+    recon: 3
+    discriminator: 0.02
+    classifier: 0.02
+    kl_bio: 0.000001
+    kl_batch: 0.01
+    ortho: 0.0002
+    kl_size: 0.002
+
+mousebrain:
+  mode: seq
+  data: Data/scRNA-seq/mousebrain.h5ad
+  model:
+    in_sz: 2000
+    out_sz: 2000
+    num_batch: 2
+  loss:
+    recon: 2
+    discriminator: 0.3
+    classifier: 0.01
+    kl_bio: 0.0005
+    kl_batch: 0.01
+    ortho: 0.001
+    kl_size: 0.01

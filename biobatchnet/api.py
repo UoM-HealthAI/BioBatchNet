@@ -7,7 +7,7 @@ import pytorch_lightning as pl
 from pytorch_lightning.callbacks import EarlyStopping
 
 from .config import Config, ModelConfig, LossConfig, TrainerConfig
-from .module import IMCModule, RNAModule
+from .module import IMCModule, SeqModule
 from .utils.dataset import BBNDataset
 
 
@@ -29,7 +29,7 @@ def correct_batch_effects(
         data: pandas DataFrame or numpy array (cells x features)
         batch_info: pandas DataFrame with batch information or array of batch labels
         batch_key: column name for batch labels (if batch_info is DataFrame)
-        data_type: 'imc' or 'rna'
+        data_type: 'imc' or 'seq'
         latent_dim: latent space dimension
         epochs: training epochs
         lr: learning rate
@@ -74,7 +74,7 @@ def correct_batch_effects(
             kl_batch=0.1,
             ortho=0.01,
         )
-    else:  # rna
+    else:  # seq
         loss_config = LossConfig(
             recon=10.0,
             discriminator=0.04,
@@ -105,7 +105,7 @@ def correct_batch_effects(
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
     # Create Lightning module
-    Module = IMCModule if data_type == 'imc' else RNAModule
+    Module = IMCModule if data_type == 'imc' else SeqModule
     model = Module(config)
 
     # Train with Lightning

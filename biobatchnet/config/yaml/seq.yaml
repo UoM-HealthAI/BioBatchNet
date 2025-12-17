@@ -1,6 +1,6 @@
 _base_: base.yaml
-name: rna_experiment
-mode: rna
+name: seq_experiment
+mode: seq
 
 model:
   in_sz: 2000

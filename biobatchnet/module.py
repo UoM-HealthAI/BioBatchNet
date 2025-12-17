@@ -9,8 +9,6 @@ from .config import Config
 
 
 class BaseBBNModule(pl.LightningModule):
-    """Base module with shared training logic."""
-
     def __init__(self, config: Config):
         super().__init__()
         self.save_hyperparameters(ignore=['config'])
@@ -21,15 +19,14 @@ class BaseBBNModule(pl.LightningModule):
     def forward(self, x):
         return self.model(x)
 
-    def _log_metrics(self, loss, recon, disc, clf, kl_bio, kl_batch, ortho, bio_acc, batch_acc):
-        """Log training metrics."""
+    def _log_metrics(self, loss, recon_loss, discriminator_loss, classifier_loss, kl_bio, kl_batch, ortho_loss, bio_acc, batch_acc):
         self.log('loss', loss, prog_bar=True)
-        self.log('recon', recon)
-        self.log('disc', disc)
-        self.log('clf', clf)
+        self.log('recon_loss', recon_loss)
+        self.log('discriminator_loss', discriminator_loss)
+        self.log('classifier_loss', classifier_loss)
         self.log('kl_bio', kl_bio)
         self.log('kl_batch', kl_batch)
-        self.log('ortho', ortho)
+        self.log('ortho_loss', ortho_loss)
         self.log('bio_acc', bio_acc, prog_bar=True)
         self.log('batch_acc', batch_acc, prog_bar=True)
 
@@ -63,8 +60,6 @@ class BaseBBNModule(pl.LightningModule):
 
 
 class IMCModule(BaseBBNModule):
-    """Lightning module for IMC data with MSE reconstruction."""
-
     def __init__(self, config: Config):
         super().__init__(config)
         self.model = IMCVAE(config.model)
@@ -74,32 +69,30 @@ class IMCModule(BaseBBNModule):
         data, batch_id, *_ = batch
         out = self(data)
 
-        recon = self.recon_loss(data, out.reconstruction)
+        recon_loss = self.recon_loss(data, out.reconstruction)
         kl_bio = kl_divergence(out.bio_mu, out.bio_logvar).mean()
         kl_batch = kl_divergence(out.batch_mu, out.batch_logvar).mean()
-        disc = self.ce_loss(out.bio_batch_pred, batch_id)
-        clf = self.ce_loss(out.batch_batch_pred, batch_id)
-        ortho = orthogonal_loss(out.bio_z, out.batch_z)
+        discriminator_loss = self.ce_loss(out.bio_batch_pred, batch_id)
+        classifier_loss = self.ce_loss(out.batch_batch_pred, batch_id)
+        ortho_loss = orthogonal_loss(out.bio_z, out.batch_z)
 
         loss = (
-            self.lw.recon * recon +
-            self.lw.discriminator * disc +
-            self.lw.classifier * clf +
+            self.lw.recon * recon_loss +
+            self.lw.discriminator * discriminator_loss +
+            self.lw.classifier * classifier_loss +
             self.lw.kl_bio * kl_bio +
             self.lw.kl_batch * kl_batch +
-            self.lw.ortho * ortho
+            self.lw.ortho * ortho_loss
         )
 
         bio_acc = (out.bio_batch_pred.argmax(1) == batch_id).float().mean()
         batch_acc = (out.batch_batch_pred.argmax(1) == batch_id).float().mean()
 
-        self._log_metrics(loss, recon, disc, clf, kl_bio, kl_batch, ortho, bio_acc, batch_acc)
+        self._log_metrics(loss, recon_loss, discriminator_loss, classifier_loss, kl_bio, kl_batch, ortho_loss, bio_acc, batch_acc)
         return loss
 
 
-class RNAModule(BaseBBNModule):
-    """Lightning module for scRNA-seq data with ZINB reconstruction."""
-
+class SeqModule(BaseBBNModule):
     def __init__(self, config: Config):
         super().__init__(config)
         self.model = GeneVAE(config.model)
@@ -109,27 +102,28 @@ class RNAModule(BaseBBNModule):
         data, batch_id, *_ = batch
         out = self(data)
 
-        recon = self.recon_loss(data, out.mean, out.disp, out.pi)
+        recon_loss = self.recon_loss(data, out.mean, out.disp, out.pi)
         kl_bio = kl_divergence(out.bio_mu, out.bio_logvar).mean()
         kl_batch = kl_divergence(out.batch_mu, out.batch_logvar).mean()
-        disc = self.ce_loss(out.bio_batch_pred, batch_id)
-        clf = self.ce_loss(out.batch_batch_pred, batch_id)
-        ortho = orthogonal_loss(out.bio_z, out.batch_z)
+
+        discriminator_loss = self.ce_loss(out.bio_batch_pred, batch_id)
+        classifier_loss = self.ce_loss(out.batch_batch_pred, batch_id)
+        ortho_loss = orthogonal_loss(out.bio_z, out.batch_z)
+
         kl_size = kl_divergence(out.size_mu, out.size_logvar).mean()
 
         loss = (
-            self.lw.recon * recon +
-            self.lw.discriminator * disc +
-            self.lw.classifier * clf +
+            self.lw.recon * recon_loss +
+            self.lw.discriminator * discriminator_loss +
+            self.lw.classifier * classifier_loss +
             self.lw.kl_bio * kl_bio +
             self.lw.kl_batch * kl_batch +
-            self.lw.ortho * ortho +
+            self.lw.ortho * ortho_loss +
             self.lw.kl_size * kl_size
         )
 
         bio_acc = (out.bio_batch_pred.argmax(1) == batch_id).float().mean()
         batch_acc = (out.batch_batch_pred.argmax(1) == batch_id).float().mean()
 
-        self._log_metrics(loss, recon, disc, clf, kl_bio, kl_batch, ortho, bio_acc, batch_acc)
-        self.log('kl_size', kl_size)
+        self._log_metrics(loss, recon_loss, discriminator_loss, classifier_loss, kl_bio, kl_batch, ortho_loss, bio_acc, batch_acc)
         return loss

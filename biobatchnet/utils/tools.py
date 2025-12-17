@@ -1,8 +1,6 @@
 import scanpy as sc
 import scib
 import matplotlib.pyplot as plt
-from pathlib import Path
-import yaml
 import numpy as np
 import pandas as pd
 from scipy.sparse import issparse
@@ -18,25 +16,7 @@ def visualization(save_dir, adata, emb, epoch):
     plt.close()
 
 
-def load_preset(name: str):
-    """Load preset config and data path from presets.yaml."""
-    presets_path = Path(__file__).resolve().parent.parent / 'config' / 'presets.yaml'
-    with open(presets_path, 'r') as f:
-        presets = yaml.safe_load(f)
-
-    for mode in ['imc', 'rna']:
-        if name in presets.get(mode, {}):
-            preset = presets[mode][name]
-            preset['mode'] = mode
-            return preset
-
-    available = []
-    for mode in ['imc', 'rna']:
-        available.extend(presets.get(mode, {}).keys())
-    raise ValueError(f"Dataset '{name}' not found. Available: {available}")
-
-
-def scRNA_preprocess(adata: sc.AnnData) -> sc.AnnData:
+def seq_preprocess(adata: sc.AnnData) -> sc.AnnData:
     """Standard preprocessing for scRNA-seq data."""
     adata = adata.copy()
 
@@ -56,8 +36,8 @@ def load_adata(path: str, data_type: str, preprocess: bool = False, batch_key: s
     """Load AnnData and extract data, batch_labels, cell_types."""
     adata = sc.read_h5ad(path)
 
-    if data_type == 'rna' and preprocess:
-        adata = scRNA_preprocess(adata)
+    if data_type == 'seq' and preprocess:
+        adata = seq_preprocess(adata)
 
     if issparse(adata.X):
         data = adata.X.toarray()

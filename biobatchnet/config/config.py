@@ -40,7 +40,7 @@ class LossConfig:
     kl_bio: float = 0.001
     kl_batch: float = 0.1
     ortho: float = 0.01
-    kl_size: float = 0.002  # only for GeneVAE/scRNA
+    kl_size: float = 0.002  # only for GeneVAE/seq
 
 
 @dataclass
@@ -72,8 +72,9 @@ class TrainerConfig:
 class Config:
     """Master configuration."""
     name: str = "experiment"
-    mode: str = "imc"  # "imc" or "rna"
+    mode: str = "imc"  # "imc" or "seq"
     seed: int = 42
+    preset: str = ""  # dataset key in presets.yaml (e.g. "damond", "pancreas")
 
     data: DataConfig = field(default_factory=DataConfig)
     model: ModelConfig = field(default_factory=ModelConfig)
@@ -81,75 +82,70 @@ class Config:
     trainer: TrainerConfig = field(default_factory=TrainerConfig)
 
     @classmethod
-    def from_yaml(cls, yaml_path: str) -> 'Config':
-        """Load configuration from YAML file."""
-        yaml_path = Path(yaml_path)
+    def load(cls, config: str) -> 'Config':
+        """Load config from file path or preset name."""
+        path = Path(config)
+        if path.exists():
+            return cls._from_yaml(path)
+        return cls._from_preset(config)
 
+    @classmethod
+    def _from_yaml(cls, yaml_path: Path) -> 'Config':
+        """Load configuration from YAML file."""
         with open(yaml_path, 'r') as f:
             yaml_dict = yaml.safe_load(f)
 
-        # Handle base config inheritance
+        # Handle _base_ file inheritance
         if '_base_' in yaml_dict:
-            base_path = yaml_path.parent / yaml_dict['_base_']
+            base_path = yaml_path.parent / yaml_dict.pop('_base_')
             with open(base_path, 'r') as f:
                 base_dict = yaml.safe_load(f)
             yaml_dict = _deep_merge(base_dict, yaml_dict)
-            del yaml_dict['_base_']
+
+        # Handle preset inheritance
+        if yaml_dict.get('preset'):
+            preset_dict = cls._load_preset_dict(yaml_dict['preset'])
+            yaml_dict = _deep_merge(preset_dict, yaml_dict)
 
         return cls._from_dict(yaml_dict)
 
     @classmethod
+    def _from_preset(cls, dataset: str) -> 'Config':
+        """Load configuration from preset name."""
+        return cls._from_dict(cls._load_preset_dict(dataset))
+
+    @classmethod
+    def _load_preset_dict(cls, dataset: str) -> dict:
+        """Load preset as dictionary."""
+        presets_path = Path(__file__).parent / 'yaml' / 'presets.yaml'
+        with open(presets_path, 'r') as f:
+            presets = yaml.safe_load(f)
+
+        if dataset not in presets:
+            raise ValueError(f"Dataset '{dataset}' not found. Available: {list(presets.keys())}")
+
+        preset = presets[dataset]
+        return {
+            'name': dataset,
+            'mode': preset['mode'],
+            'preset': dataset,
+            'data': {'path': preset.get('data')},
+            'model': preset.get('model', {}),
+            'loss': preset.get('loss', {}),
+        }
+
+    @classmethod
     def _from_dict(cls, d: dict) -> 'Config':
         """Create Config from dictionary."""
-        data_dict = d.get('data', {})
-        model_dict = d.get('model', {})
-        loss_dict = d.get('loss', {})
-        trainer_dict = d.get('trainer', {})
-
         return cls(
             name=d.get('name', 'experiment'),
             mode=d.get('mode', 'imc'),
             seed=d.get('seed', 42),
-            data=DataConfig(**data_dict) if data_dict else DataConfig(),
-            model=ModelConfig(**model_dict) if model_dict else ModelConfig(),
-            loss=LossConfig(**loss_dict) if loss_dict else LossConfig(),
-            trainer=TrainerConfig(**trainer_dict) if trainer_dict else TrainerConfig(),
-        )
-
-    @classmethod
-    def from_preset(cls, dataset: str) -> 'Config':
-        """Load configuration from preset for a specific dataset.
-
-        Args:
-            dataset: Dataset name, e.g., 'damond', 'pancreas', 'mousebrain'
-        """
-        presets_path = Path(__file__).parent / 'presets.yaml'
-        with open(presets_path, 'r') as f:
-            presets = yaml.safe_load(f)
-
-        # Find dataset in presets
-        preset = None
-        mode = None
-        for m in ['imc', 'rna']:
-            if dataset in presets.get(m, {}):
-                preset = presets[m][dataset]
-                mode = m
-                break
-
-        if preset is None:
-            available = []
-            for m in ['imc', 'rna']:
-                available.extend(presets.get(m, {}).keys())
-            raise ValueError(f"Dataset '{dataset}' not found. Available: {available}")
-
-        model_dict = preset.get('model', {})
-        loss_dict = preset.get('loss', {})
-
-        return cls(
-            name=dataset,
-            mode=mode,
-            model=ModelConfig(**{**ModelConfig().__dict__, **model_dict}),
-            loss=LossConfig(**{**LossConfig().__dict__, **loss_dict}),
+            preset=d.get('preset', ''),
+            data=DataConfig(**d.get('data', {})),
+            model=ModelConfig(**d.get('model', {})),
+            loss=LossConfig(**d.get('loss', {})),
+            trainer=TrainerConfig(**d.get('trainer', {})),
         )
 
     def to_yaml(self, yaml_path: str):
@@ -158,6 +154,7 @@ class Config:
             'name': self.name,
             'mode': self.mode,
             'seed': self.seed,
+            'preset': self.preset,
             'data': self.data.__dict__,
             'model': self.model.__dict__,
             'loss': self.loss.__dict__,
