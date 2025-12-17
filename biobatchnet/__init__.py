@@ -1,6 +1,7 @@
 from .models.model import IMCVAE, GeneVAE
 from .api import correct_batch_effects
 from .config import Config, ModelConfig, LossConfig, TrainerConfig
+from .train import train
 
 try:
     from importlib.metadata import version, PackageNotFoundError
@@ -16,6 +17,7 @@ __all__ = [
     "IMCVAE",
     "GeneVAE",
     "correct_batch_effects",
+    "train",
     "Config",
     "ModelConfig",
     "LossConfig",

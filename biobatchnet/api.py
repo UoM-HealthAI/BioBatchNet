@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 from .models.model import IMCVAE, GeneVAE
 from .config import Config, ModelConfig, LossConfig, TrainerConfig
 from .utils.trainer import Trainer
-from .utils.user_dataset import UserIMCDataset
+from .utils.dataset import BatchDataset
 
 
 def correct_batch_effects(
@@ -109,7 +109,7 @@ def correct_batch_effects(
         model = GeneVAE(model_config)
 
     # Create dataset and dataloader
-    dataset = UserIMCDataset(data, batch_labels)
+    dataset = BatchDataset(data, batch_labels)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
     # Check device

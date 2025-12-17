@@ -1,5 +1,6 @@
 imc:
   damond:
+    data: Data/IMC/damond.h5ad
     model:
       in_sz: 38
       out_sz: 38
@@ -13,6 +14,7 @@ imc:
       ortho: 0.01
 
   hoch:
+    data: Data/IMC/hoch.h5ad
     model:
       in_sz: 41
       out_sz: 41
@@ -26,6 +28,7 @@ imc:
       ortho: 0.01
 
   immuncan:
+    data: Data/IMC/immuncan.h5ad
     model:
       in_sz: 40
       out_sz: 40
@@ -40,6 +43,7 @@ imc:
 
 rna:
   pancreas:
+    data: Data/scRNA-seq/pancreas.h5ad
     model:
       in_sz: 2000
       out_sz: 2000
@@ -54,6 +58,7 @@ rna:
       kl_size: 0.002
 
   macaque:
+    data: Data/scRNA-seq/macaque.h5ad
     model:
       in_sz: 2000
       out_sz: 2000
@@ -68,6 +73,7 @@ rna:
       kl_size: 0.002
 
   mousebrain:
+    data: Data/scRNA-seq/mousebrain.h5ad
     model:
       in_sz: 2000
       out_sz: 2000
