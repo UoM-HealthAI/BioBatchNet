@@ -7,7 +7,7 @@ import pytorch_lightning as pl
 from pytorch_lightning.callbacks import EarlyStopping
 
 from .config import Config, ModelConfig, LossConfig, TrainerConfig
-from .module import BioBatchNetModule
+from .module import IMCModule, RNAModule
 from .utils.dataset import BBNDataset
 
 
@@ -105,7 +105,8 @@ def correct_batch_effects(
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
     # Create Lightning module
-    model = BioBatchNetModule(config)
+    Module = IMCModule if data_type == 'imc' else RNAModule
+    model = Module(config)
 
     # Train with Lightning
     trainer = pl.Trainer(

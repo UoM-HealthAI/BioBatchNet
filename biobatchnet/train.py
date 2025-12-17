@@ -13,7 +13,7 @@ from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
 
 from .config import Config
-from .module import BioBatchNetModule
+from .module import IMCModule, RNAModule
 from .utils.dataset import BBNDataset
 from .utils.tools import load_preset, load_adata
 
@@ -47,7 +47,8 @@ def train(config: Config, seed: int = 42):
         persistent_workers=True,
     )
 
-    model = BioBatchNetModule(config)
+    Module = IMCModule if config.mode == 'imc' else RNAModule
+    model = Module(config)
 
     callbacks = [
         EarlyStopping(monitor='loss', patience=config.trainer.early_stop, mode='min'),
