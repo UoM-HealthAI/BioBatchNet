@@ -1,4 +1,5 @@
 import scanpy as sc
+import scib
 import matplotlib.pyplot as plt
 from pathlib import Path
 import yaml
@@ -67,3 +68,45 @@ def load_adata(path: str, data_type: str, preprocess: bool = False, batch_key: s
     cell_types = pd.Categorical(adata.obs[cell_type_key]).codes if cell_type_key in adata.obs.columns else None
 
     return data, batch_labels, cell_types
+
+
+def evaluate(
+    adata,
+    adata_raw,
+    embed='X_biobatchnet',
+    batch_key='BATCH',
+    label_key='celltype',
+):
+    sc.pp.neighbors(adata, use_rep=embed)
+    sc.pp.pca(adata_raw)
+    sc.pp.neighbors(adata_raw, use_rep='X_pca')
+
+    # Batch correction metrics
+    ilisi = scib.metrics.ilisi_graph(adata, batch_key=batch_key, type_='embed', use_rep=embed)
+    graph_conn = scib.me.graph_connectivity(adata, label_key=label_key)
+    asw_batch = scib.me.silhouette_batch(adata, batch_key=batch_key, label_key=label_key, embed=embed)
+    pcr = scib.me.pcr_comparison(adata_raw, adata, covariate=batch_key, embed=embed)
+
+    # Biological conservation metrics
+    asw_cell = scib.me.silhouette(adata, label_key=label_key, embed=embed)
+    scib.me.cluster_optimal_resolution(adata, cluster_key='cluster', label_key=label_key)
+    ari = scib.me.ari(adata, cluster_key='cluster', label_key=label_key)
+    nmi = scib.me.nmi(adata, cluster_key='cluster', label_key=label_key)
+
+    # Aggregate scores
+    batch_score = (ilisi + graph_conn + asw_batch + pcr) / 4
+    bio_score = (asw_cell + ari + nmi) / 3
+    total_score = (batch_score + bio_score) / 2
+
+    return {
+        'iLISI': ilisi,
+        'GraphConn': graph_conn,
+        'ASW_batch': asw_batch,
+        'PCR': pcr,
+        'BatchScore': batch_score,
+        'ASW': asw_cell,
+        'ARI': ari,
+        'NMI': nmi,
+        'BioScore': bio_score,
+        'TotalScore': total_score,
+    }
