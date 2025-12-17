@@ -3,10 +3,11 @@ import torch
 import numpy as np
 import pandas as pd
 from torch.utils.data import DataLoader
+import pytorch_lightning as pl
+from pytorch_lightning.callbacks import EarlyStopping
 
-from .models.model import IMCVAE, GeneVAE
 from .config import Config, ModelConfig, LossConfig, TrainerConfig
-from .utils.trainer import Trainer
+from .module import BioBatchNetModule
 from .utils.dataset import BBNDataset
 
 
@@ -20,7 +21,6 @@ def correct_batch_effects(
     lr=1e-3,
     batch_size=256,
     device='cuda',
-    save_dir='./saved',
 ):
     """
     Simple API for batch effect correction.
@@ -34,8 +34,7 @@ def correct_batch_effects(
         epochs: training epochs
         lr: learning rate
         batch_size: batch size
-        device: 'cuda' or 'cpu'
-        save_dir: directory to save checkpoints
+        device: 'cuda', 'cpu', or 'auto'
 
     Returns:
         bio_embeddings: batch-corrected embeddings
@@ -91,7 +90,6 @@ def correct_batch_effects(
         batch_size=batch_size,
         lr=lr,
         early_stop=100,
-        save_dir=save_dir,
     )
 
     config = Config(
@@ -102,31 +100,25 @@ def correct_batch_effects(
         trainer=trainer_config,
     )
 
-    # Create model
-    if data_type == 'imc':
-        model = IMCVAE(model_config)
-    else:
-        model = GeneVAE(model_config)
-
     # Create dataset and dataloader
     dataset = BBNDataset(data, batch_labels)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
-    # Check device
-    if device == 'cuda' and not torch.cuda.is_available():
-        device = 'cpu'
-        print("CUDA not available, using CPU")
+    # Create Lightning module
+    model = BioBatchNetModule(config)
 
-    # Train
-    trainer = Trainer(
-        config=config,
-        model=model,
-        train_dataloader=dataloader,
-        device=device,
+    # Train with Lightning
+    trainer = pl.Trainer(
+        max_epochs=epochs,
+        callbacks=[EarlyStopping(monitor='loss', patience=15, mode='min')],
+        accelerator='auto' if device == 'auto' else device,
+        devices=1,
+        enable_progress_bar=True,
+        logger=False,
     )
-    trainer.train()
+    trainer.fit(model, dataloader)
 
     # Get embeddings
-    bio_embeddings, batch_embeddings = model.get_embeddings(data)
+    bio_embeddings, batch_embeddings = model.get_embeddings(dataloader)
 
     return bio_embeddings, batch_embeddings

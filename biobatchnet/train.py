@@ -1,4 +1,4 @@
-"""Unified training script for BioBatchNet."""
+"""Training script for BioBatchNet using PyTorch Lightning."""
 import argparse
 from pathlib import Path
 
@@ -8,111 +8,74 @@ import pandas as pd
 import scanpy as sc
 from scipy.sparse import issparse
 import yaml
+import pytorch_lightning as pl
+from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
+from pytorch_lightning.loggers import WandbLogger
 
 from .config import Config
-from .models.model import IMCVAE, GeneVAE
+from .module import BioBatchNetModule
 from .utils.dataset import BBNDataset
-from .utils.trainer import Trainer
-from .utils.util import set_random_seed
+from .utils.tools import load_preset, load_adata
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
-def load_preset(name: str):
-    """Load preset config and data path from presets.yaml."""
-    presets_path = Path(__file__).parent / 'config' / 'presets.yaml'
-    with open(presets_path, 'r') as f:
-        presets = yaml.safe_load(f)
-
-    for mode in ['imc', 'rna']:
-        if name in presets.get(mode, {}):
-            preset = presets[mode][name]
-            preset['mode'] = mode
-            return preset
-
-    available = []
-    for mode in ['imc', 'rna']:
-        available.extend(presets.get(mode, {}).keys())
-    raise ValueError(f"Dataset '{name}' not found. Available: {available}")
-
-
-def scRNA_preprocess(adata: sc.AnnData) -> sc.AnnData:
-    """Standard preprocessing for scRNA-seq data."""
-    adata = adata.copy()
-
-    if issparse(adata.X):
-        adata.X = adata.X.toarray()
-
-    sc.pp.filter_cells(adata, min_genes=200)
-    sc.pp.filter_genes(adata, min_cells=3)
-    sc.pp.highly_variable_genes(adata, n_top_genes=2000, flavor='seurat_v3', subset=True)
-    sc.pp.normalize_total(adata, target_sum=1e4)
-    sc.pp.log1p(adata)
-
-    return adata
-
-
-def load_adata(path: str, preprocess: bool = False, batch_key: str = 'BATCH', cell_type_key: str = 'celltype'):
-    """Load AnnData and extract data, batch_labels, cell_types."""
-    adata = sc.read_h5ad(path)
-
-    if preprocess:
-        adata = scRNA_preprocess(adata)
-
-    if issparse(adata.X):
-        data = adata.X.toarray()
-    else:
-        data = np.array(adata.X)
-
-    batch_labels = pd.Categorical(adata.obs[batch_key]).codes
-    cell_types = pd.Categorical(adata.obs[cell_type_key]).codes if cell_type_key in adata.obs.columns else None
-
-    return data, batch_labels, cell_types
-
-
 def train(config: Config, seed: int = 42):
-    """Train model with given config and seed."""
-    set_random_seed(seed)
+    pl.seed_everything(seed)
     config.seed = seed
 
-    # Load data from preset
+    # Load data
     preset = load_preset(config.name)
     data_path = BASE_DIR / preset['data']
-    preprocess = (preset['mode'] == 'rna')
+    preprocess = config.data.preprocess if config.data.preprocess is not None else (config.mode == 'rna')
 
-    data, batch_labels, cell_types = load_adata(data_path, preprocess=preprocess)
+    data, batch_labels, cell_types = load_adata(
+        data_path,
+        data_type=config.mode,
+        preprocess=preprocess,
+        batch_key=config.data.batch_key,
+        cell_type_key=config.data.cell_type_key,
+    )
 
-    # Create dataset
     dataset = BBNDataset(data, batch_labels, cell_types)
-
-    # Select model based on mode
-    if config.mode == 'imc':
-        model = IMCVAE(config.model)
-    else:
-        model = GeneVAE(config.model)
-
-    # Create dataloader
     dataloader = torch.utils.data.DataLoader(
         dataset,
         batch_size=config.trainer.batch_size,
         shuffle=True,
+        num_workers=4,
+        persistent_workers=True,
     )
 
-    # Device
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    model = BioBatchNetModule(config)
 
-    # Train
-    trainer = Trainer(
-        config=config,
-        model=model,
-        train_dataloader=dataloader,
-        eval_dataloader=dataloader,
-        device=device,
+    callbacks = [
+        EarlyStopping(monitor='loss', patience=config.trainer.early_stop, mode='min'),
+        ModelCheckpoint(
+            dirpath=f'./saved/{config.name}/seed_{seed}',
+            filename='best',
+            monitor='loss',
+            mode='min',
+            save_top_k=1,
+        ),
+    ]
+
+    logger = WandbLogger(
+        project='biobatchnet',
+        name=f'{config.name}_seed{seed}',
     )
-    trainer.train()
 
-    return trainer
+    trainer = pl.Trainer(
+        max_epochs=config.trainer.epochs,
+        callbacks=callbacks,
+        logger=logger,
+        enable_progress_bar=True,
+        accelerator='auto',
+    )
+
+    trainer.fit(model, dataloader)
+
+    return model
 
 
 def main():

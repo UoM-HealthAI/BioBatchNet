@@ -22,6 +22,7 @@ class RBF(nn.Module):
         bandwidth_multipliers = self.bandwidth_multipliers.to(X.device)  # Ensure the correct device
         return torch.exp(-L2_distances[None, ...] / (self.get_bandwidth(L2_distances) * bandwidth_multipliers)[:, None, None]).sum(dim=0)
 
+
 class MMDLoss(nn.Module):
     def __init__(self, kernel=RBF()):
         super().__init__()
@@ -36,6 +37,7 @@ class MMDLoss(nn.Module):
         YY = K[X_size:, X_size:].mean()
         return XX - 2 * XY + YY
 
+
 def orthogonal_loss(z1, z2):
     z1_centered = z1 - z1.mean(dim=0, keepdim=True)
     z2_centered = z2 - z2.mean(dim=0, keepdim=True)
@@ -43,15 +45,18 @@ def orthogonal_loss(z1, z2):
     ortho_loss = torch.norm(cov, p='fro') ** 2
     return ortho_loss
 
+
 def l1_loss(model):
     l1 = 0.0
     for param in model.encoder2.parameters():
         l1 += torch.sum(torch.abs(param))  
     return l1
 
+
 def kl_divergence(mu, logvar):
     kl = -0.5 * (torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1))
     return kl
+
 
 def pairwise_loss(p1, p2, cons_type):
     if cons_type == "ML":
@@ -60,6 +65,7 @@ def pairwise_loss(p1, p2, cons_type):
     else:
         cl_loss = torch.mean(-torch.log(1.0 - torch.sum(p1 * p2, dim=1)))
         return cl_loss
+
     
 class ZINBLoss(nn.Module):
     def __init__(self):

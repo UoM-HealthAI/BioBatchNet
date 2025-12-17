@@ -1,12 +1,9 @@
-"""Dataset classes for batch effect correction."""
 import torch
 from torch.utils.data import Dataset
 import numpy as np
 
 
 class BBNDataset(Dataset):
-    """Simple dataset for BioBatchNet."""
-
     def __init__(self, data, batch_labels, cell_types=None):
         self.data = torch.tensor(np.array(data), dtype=torch.float32)
         self.batch_labels = torch.tensor(np.array(batch_labels), dtype=torch.long)

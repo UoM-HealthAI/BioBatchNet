@@ -1,8 +1,17 @@
 """Configuration management using dataclasses."""
 from dataclasses import dataclass, field
-from typing import List
+from typing import List, Optional
 from pathlib import Path
 import yaml
+
+
+@dataclass
+class DataConfig:
+    """Data loading configuration."""
+    path: Optional[str] = None  # .h5ad path; absolute or relative to project root
+    preprocess: Optional[bool] = None  # if None, infer from mode
+    batch_key: str = "BATCH"
+    cell_type_key: str = "celltype"
 
 
 @dataclass
@@ -66,6 +75,7 @@ class Config:
     mode: str = "imc"  # "imc" or "rna"
     seed: int = 42
 
+    data: DataConfig = field(default_factory=DataConfig)
     model: ModelConfig = field(default_factory=ModelConfig)
     loss: LossConfig = field(default_factory=LossConfig)
     trainer: TrainerConfig = field(default_factory=TrainerConfig)
@@ -91,6 +101,7 @@ class Config:
     @classmethod
     def _from_dict(cls, d: dict) -> 'Config':
         """Create Config from dictionary."""
+        data_dict = d.get('data', {})
         model_dict = d.get('model', {})
         loss_dict = d.get('loss', {})
         trainer_dict = d.get('trainer', {})
@@ -99,6 +110,7 @@ class Config:
             name=d.get('name', 'experiment'),
             mode=d.get('mode', 'imc'),
             seed=d.get('seed', 42),
+            data=DataConfig(**data_dict) if data_dict else DataConfig(),
             model=ModelConfig(**model_dict) if model_dict else ModelConfig(),
             loss=LossConfig(**loss_dict) if loss_dict else LossConfig(),
             trainer=TrainerConfig(**trainer_dict) if trainer_dict else TrainerConfig(),
@@ -146,6 +158,7 @@ class Config:
             'name': self.name,
             'mode': self.mode,
             'seed': self.seed,
+            'data': self.data.__dict__,
             'model': self.model.__dict__,
             'loss': self.loss.__dict__,
             'trainer': self.trainer.__dict__,
