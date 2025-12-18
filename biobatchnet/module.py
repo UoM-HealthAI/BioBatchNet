@@ -5,32 +5,34 @@ import pytorch_lightning as pl
 
 from .models.model import IMCVAE, GeneVAE
 from .utils.loss import kl_divergence, orthogonal_loss, ZINBLoss
+from .utils.tools import visualization
 from .config import Config
 
 
 class BaseBBNModule(pl.LightningModule):
-    def __init__(self, config: Config, in_sz: int, num_batch: int):
+    def __init__(self, config: Config, in_sz: int, num_batch: int, save_dir=None):
         super().__init__()
-        self.save_hyperparameters(ignore=['config'])
+        self.save_hyperparameters(ignore=['config', 'save_dir'])
         self.config = config
         self.in_sz = in_sz
         self.num_batch = num_batch
         self.lw = config.loss
         self.ce_loss = nn.CrossEntropyLoss()
+        self.save_dir = save_dir
 
     def forward(self, x):
         return self.model(x)
 
     def _log_metrics(self, loss, recon_loss, discriminator_loss, classifier_loss, kl_bio, kl_batch, ortho_loss, bio_acc, batch_acc):
-        self.log('loss', loss, prog_bar=True)
-        self.log('recon_loss', recon_loss)
-        self.log('discriminator_loss', discriminator_loss)
-        self.log('classifier_loss', classifier_loss)
-        self.log('kl_bio', kl_bio)
-        self.log('kl_batch', kl_batch)
-        self.log('ortho_loss', ortho_loss)
-        self.log('bio_acc', bio_acc, prog_bar=True)
-        self.log('batch_acc', batch_acc, prog_bar=True)
+        self.log('loss', loss, prog_bar=True, on_step=True, on_epoch=True)
+        self.log('recon_loss', recon_loss, on_step=True, on_epoch=True)
+        self.log('discriminator_loss', discriminator_loss, on_step=True, on_epoch=True)
+        self.log('classifier_loss', classifier_loss, on_step=True, on_epoch=True)
+        self.log('kl_bio', kl_bio, on_step=True, on_epoch=True)
+        self.log('kl_batch', kl_batch, on_step=True, on_epoch=True)
+        self.log('ortho_loss', ortho_loss, on_step=True, on_epoch=True)
+        self.log('bio_acc', bio_acc, prog_bar=True, on_step=True, on_epoch=True)
+        self.log('batch_acc', batch_acc, prog_bar=True, on_step=True, on_epoch=True)
 
     def configure_optimizers(self):
         tc = self.config.trainer
@@ -60,10 +62,21 @@ class BaseBBNModule(pl.LightningModule):
 
         return torch.cat(bio_z_list).numpy(), torch.cat(batch_z_list).numpy()
 
+    def on_train_epoch_end(self):
+        epoch = self.current_epoch + 1
+        if self.save_dir and epoch % self.config.trainer.save_period == 0:
+            dataset = self.trainer.train_dataloader.dataset
+            if dataset.cell_types is None:
+                return
+            loader = torch.utils.data.DataLoader(dataset, batch_size=128, shuffle=False)
+            bio_z, _ = self.get_embeddings(loader)
+            save_path = self.save_dir / f'umap_epoch{epoch}.png'
+            visualization(bio_z, dataset.batch_labels.numpy(), dataset.cell_types.numpy(), save_path)
+
 
 class IMCModule(BaseBBNModule):
-    def __init__(self, config: Config, in_sz: int, num_batch: int):
-        super().__init__(config, in_sz, num_batch)
+    def __init__(self, config: Config, in_sz: int, num_batch: int, save_dir=None):
+        super().__init__(config, in_sz, num_batch, save_dir)
         self.model = IMCVAE(config.model, in_sz, in_sz, num_batch)
         self.recon_loss = nn.MSELoss()
 
@@ -95,8 +108,8 @@ class IMCModule(BaseBBNModule):
 
 
 class SeqModule(BaseBBNModule):
-    def __init__(self, config: Config, in_sz: int, num_batch: int):
-        super().__init__(config, in_sz, num_batch)
+    def __init__(self, config: Config, in_sz: int, num_batch: int, save_dir=None):
+        super().__init__(config, in_sz, num_batch, save_dir)
         self.model = GeneVAE(config.model, in_sz, in_sz, num_batch)
         self.recon_loss = ZINBLoss()
 

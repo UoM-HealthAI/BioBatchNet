@@ -1,30 +1,39 @@
 """Training script for BioBatchNet using PyTorch Lightning."""
 import argparse
+import json
+from datetime import datetime
 from pathlib import Path
 
 import torch
 import numpy as np
-import pandas as pd
 import scanpy as sc
-from scipy.sparse import issparse
-import yaml
 import pytorch_lightning as pl
-from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
+from pytorch_lightning.callbacks import EarlyStopping
 from pytorch_lightning.loggers import WandbLogger
 
 from .config import Config
 from .module import IMCModule, SeqModule
 from .utils.dataset import BBNDataset
-from .utils.tools import load_adata
+from .utils.tools import load_adata, evaluate, independence_metrics
+
+SAVE_ROOT = Path(__file__).parent / 'saved'
 
 
 def train(config: Config, seed: int = 42):
     pl.seed_everything(seed)
     config.seed = seed
 
+    # Setup save directory: saved/{name}/{timestamp}/seed_{seed}/
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    save_dir = SAVE_ROOT / config.name / timestamp / f'seed_{seed}'
+    save_dir.mkdir(parents=True, exist_ok=True)
+
     # Load data
     data_path = config.data.path
     preprocess = config.data.preprocess if config.data.preprocess is not None else (config.mode == 'seq')
+
+    adata = sc.read_h5ad(str(data_path))
+    adata_raw = adata.copy()
 
     data, batch_labels, cell_types = load_adata(
         str(data_path),
@@ -48,38 +57,57 @@ def train(config: Config, seed: int = 42):
     )
 
     Module = IMCModule if config.mode == 'imc' else SeqModule
-    model = Module(config, in_sz, num_batch)
+    model = Module(config, in_sz, num_batch, save_dir=save_dir)
 
     callbacks = [
         EarlyStopping(monitor='loss', patience=config.trainer.early_stop, mode='min'),
-        ModelCheckpoint(
-            dirpath=f'./saved/{config.name}/seed_{seed}',
-            filename='best',
-            monitor='loss',
-            mode='min',
-            save_top_k=1,
-        ),
     ]
 
     logger = WandbLogger(
         project='biobatchnet',
-        name=f'{config.name}_seed{seed}',
+        name=f'{config.name}_{timestamp}_seed{seed}',
     )
 
     trainer = pl.Trainer(
         max_epochs=config.trainer.epochs,
         callbacks=callbacks,
         logger=logger,
+        enable_checkpointing=False,
         enable_progress_bar=True,
         accelerator='auto',
     )
 
     n = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print("trainable_params:", n)
-    
+
     trainer.fit(model, dataloader)
 
-    return model
+    # Evaluate
+    eval_loader = torch.utils.data.DataLoader(dataset, batch_size=config.trainer.batch_size, shuffle=False)
+    z_bio, z_batch = model.get_embeddings(eval_loader)
+    adata.obsm['X_biobatchnet'] = z_bio
+
+    # Evaluation metrics
+    eval_metrics = evaluate(
+        adata, adata_raw,
+        embed='X_biobatchnet',
+        batch_key=config.data.batch_key,
+        label_key=config.data.cell_type_key,
+        fraction=config.trainer.sampling_fraction,
+    )
+    for k, v in eval_metrics.items():
+        print(f"{k}: {v:.4f}")
+
+    # Independence metrics
+    inde_metrics = independence_metrics(z_bio, z_batch)
+    for k, v in inde_metrics.items():
+        print(f"{k}: {v:.4f}")
+
+    # Save metrics
+    with open(save_dir / 'metrics.json', 'w') as f:
+        json.dump({'eval': eval_metrics, 'independence': inde_metrics}, f, indent=2)
+
+    return model, eval_metrics, inde_metrics
 
 
 def main():

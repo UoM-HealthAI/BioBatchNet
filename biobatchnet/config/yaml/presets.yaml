@@ -8,6 +8,8 @@ damond:
     kl_bio: 0.001
     kl_batch: 0.1
     ortho: 0.01
+  trainer:
+    sampling_fraction: 0.2
 
 hoch:
   mode: imc
@@ -19,6 +21,8 @@ hoch:
     kl_bio: 0.0
     kl_batch: 0.1
     ortho: 0.01
+  trainer:
+    sampling_fraction: 0.1
 
 immuncan:
   mode: imc

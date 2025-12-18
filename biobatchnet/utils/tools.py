@@ -4,15 +4,21 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from scipy.sparse import issparse
+from scipy.stats import pearsonr
+from sklearn.feature_selection import mutual_info_regression
 
 
-def visualization(save_dir, adata, emb, epoch):
-    """UMAP visualization of embeddings."""
-    sc.pp.subsample(adata, fraction=0.3)
-    sc.pp.neighbors(adata, use_rep=emb)
+def visualization(embedding, batch_labels, cell_types, save_path, batch_key='BATCH', label_key='celltype'):
+    import anndata as ad
+    adata = ad.AnnData(embedding)
+    adata.obs[batch_key] = pd.Categorical(batch_labels)
+    adata.obs[label_key] = pd.Categorical(cell_types)
+
+    adata = sc.pp.subsample(adata, fraction=0.1, random_state=42, copy=True)
+    sc.pp.neighbors(adata)
     sc.tl.umap(adata)
-    sc.pl.umap(adata, color=['BATCH', 'celltype'], frameon=False)
-    plt.savefig(f'{save_dir}/{emb}_{epoch}_umap.png')
+    sc.pl.umap(adata, color=[batch_key, label_key], frameon=False)
+    plt.savefig(save_path)
     plt.close()
 
 
@@ -39,16 +45,11 @@ def load_adata(path: str, data_type: str, preprocess: bool = False, batch_key: s
     if data_type == 'seq' and preprocess:
         adata = seq_preprocess(adata)
 
-    if issparse(adata.X):
-        data = adata.X.toarray()
-    else:
-        data = np.array(adata.X)
-
+    data = adata.X.toarray() if issparse(adata.X) else np.array(adata.X)
+    
     batch_labels = pd.Categorical(adata.obs[batch_key]).codes
     cell_types = pd.Categorical(adata.obs[cell_type_key]).codes if cell_type_key in adata.obs.columns else None
-
     return data, batch_labels, cell_types
-
 
 def evaluate(
     adata,
@@ -56,22 +57,26 @@ def evaluate(
     embed='X_biobatchnet',
     batch_key='BATCH',
     label_key='celltype',
+    fraction=1.0,
 ):
-    sc.pp.neighbors(adata, use_rep=embed)
-    sc.pp.pca(adata_raw)
-    sc.pp.neighbors(adata_raw, use_rep='X_pca')
+    adata_sub = sc.pp.subsample(adata, fraction=fraction, random_state=42, copy=True)
+    adata_raw_sub = adata_raw[adata_sub.obs_names].copy()
+
+    sc.pp.neighbors(adata_sub, use_rep=embed)
+    sc.pp.pca(adata_raw_sub)
+    sc.pp.neighbors(adata_raw_sub, use_rep='X_pca')
 
     # Batch correction metrics
-    ilisi = scib.metrics.ilisi_graph(adata, batch_key=batch_key, type_='embed', use_rep=embed)
-    graph_conn = scib.me.graph_connectivity(adata, label_key=label_key)
-    asw_batch = scib.me.silhouette_batch(adata, batch_key=batch_key, label_key=label_key, embed=embed)
-    pcr = scib.me.pcr_comparison(adata_raw, adata, covariate=batch_key, embed=embed)
+    ilisi = scib.metrics.ilisi_graph(adata_sub, batch_key=batch_key, type_='embed', use_rep=embed)
+    graph_conn = scib.me.graph_connectivity(adata_sub, label_key=label_key)
+    asw_batch = scib.me.silhouette_batch(adata_sub, batch_key=batch_key, label_key=label_key, embed=embed)
+    pcr = scib.me.pcr_comparison(adata_raw_sub, adata_sub, covariate=batch_key, embed=embed)
 
     # Biological conservation metrics
-    asw_cell = scib.me.silhouette(adata, label_key=label_key, embed=embed)
-    scib.me.cluster_optimal_resolution(adata, cluster_key='cluster', label_key=label_key)
-    ari = scib.me.ari(adata, cluster_key='cluster', label_key=label_key)
-    nmi = scib.me.nmi(adata, cluster_key='cluster', label_key=label_key)
+    asw_cell = scib.me.silhouette(adata_sub, label_key=label_key, embed=embed)
+    scib.me.cluster_optimal_resolution(adata_sub, cluster_key='cluster', label_key=label_key)
+    ari = scib.me.ari(adata_sub, cluster_key='cluster', label_key=label_key)
+    nmi = scib.me.nmi(adata_sub, cluster_key='cluster', label_key=label_key)
 
     # Aggregate scores
     batch_score = (ilisi + graph_conn + asw_batch + pcr) / 4
@@ -89,4 +94,27 @@ def evaluate(
         'NMI': nmi,
         'BioScore': bio_score,
         'TotalScore': total_score,
+    }
+
+
+def independence_metrics(bio_z: np.ndarray, batch_z: np.ndarray) -> dict:
+    corrs = []
+    for i in range(bio_z.shape[1]):
+        for j in range(batch_z.shape[1]):
+            r, _ = pearsonr(bio_z[:, i], batch_z[:, j])
+            corrs.append(abs(r))
+    mean_corr = np.mean(corrs)
+    max_corr = np.max(corrs)
+
+    # Mutual information: estimate MI between batch_z and each dimension of bio_z
+    mi_scores = []
+    for i in range(bio_z.shape[1]):
+        mi = mutual_info_regression(batch_z, bio_z[:, i], random_state=42)
+        mi_scores.append(mi.mean())
+    mean_mi = np.mean(mi_scores)
+
+    return {
+        'mean_abs_corr': mean_corr,
+        'max_abs_corr': max_corr,
+        'mean_MI': mean_mi,
     }

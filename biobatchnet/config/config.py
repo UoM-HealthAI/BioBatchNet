@@ -128,6 +128,7 @@ class Config:
             'data': {'path': preset.get('data')},
             'model': preset.get('model', {}),
             'loss': preset.get('loss', {}),
+            'trainer': preset.get('trainer', {}),
         }
 
     @classmethod
