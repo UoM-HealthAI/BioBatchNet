@@ -74,6 +74,9 @@ def train(config: Config, seed: int = 42):
         accelerator='auto',
     )
 
+    n = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print("trainable_params:", n)
+    
     trainer.fit(model, dataloader)
 
     return model
