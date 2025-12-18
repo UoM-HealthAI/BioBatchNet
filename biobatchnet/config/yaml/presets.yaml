@@ -1,10 +1,6 @@
 damond:
   mode: imc
   data: Data/IMC/subDamond_full.h5ad
-  model:
-    in_sz: 38
-    out_sz: 38
-    num_batch: 12
   loss:
     recon: 10
     discriminator: 0.3
@@ -16,10 +12,6 @@ damond:
 hoch:
   mode: imc
   data: Data/IMC/HochSchulz.h5ad
-  model:
-    in_sz: 41
-    out_sz: 41
-    num_batch: 39
   loss:
     recon: 10
     discriminator: 0.1
@@ -31,10 +23,6 @@ hoch:
 immuncan:
   mode: imc
   data: Data/IMC/IMMUcan_batch.h5ad
-  model:
-    in_sz: 40
-    out_sz: 40
-    num_batch: 4
   loss:
     recon: 10
     discriminator: 0.3
@@ -46,10 +34,6 @@ immuncan:
 pancreas:
   mode: seq
   data: Data/scRNA-seq/pancreas.h5ad
-  model:
-    in_sz: 2000
-    out_sz: 2000
-    num_batch: 8
   loss:
     recon: 10
     discriminator: 0.04
@@ -62,10 +46,6 @@ pancreas:
 macaque:
   mode: seq
   data: Data/scRNA-seq/macaque.h5ad
-  model:
-    in_sz: 2000
-    out_sz: 2000
-    num_batch: 4
   loss:
     recon: 3
     discriminator: 0.02
@@ -78,10 +58,6 @@ macaque:
 mousebrain:
   mode: seq
   data: Data/scRNA-seq/mousebrain.h5ad
-  model:
-    in_sz: 2000
-    out_sz: 2000
-    num_batch: 2
   loss:
     recon: 2
     discriminator: 0.3

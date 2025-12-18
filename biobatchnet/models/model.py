@@ -44,16 +44,16 @@ class GeneVAEOutput:
 
 class IMCVAE(nn.Module):
     """VAE for IMC data batch effect correction using MSE reconstruction."""
-    def __init__(self, config: ModelConfig):
+    def __init__(self, config: ModelConfig, in_sz: int, out_sz: int, num_batch: int):
         super().__init__()
         self.config = config
 
         # Build layer sizes
-        bio_enc_sizes = [config.in_sz] + config.bio_encoder_layers + [config.latent_sz]
-        batch_enc_sizes = [config.in_sz] + config.batch_encoder_layers + [config.latent_sz]
-        dec_sizes = [2 * config.latent_sz] + config.decoder_layers + [config.out_sz]
-        bio_clf_sizes = [config.latent_sz] + config.bio_classifier_layers + [config.num_batch]
-        batch_clf_sizes = [config.latent_sz] + config.batch_classifier_layers + [config.num_batch]
+        bio_enc_sizes = [in_sz] + config.bio_encoder_layers + [config.latent_sz]
+        batch_enc_sizes = [in_sz] + config.batch_encoder_layers + [config.latent_sz]
+        dec_sizes = [2 * config.latent_sz] + config.decoder_layers + [out_sz]
+        bio_clf_sizes = [config.latent_sz] + config.bio_classifier_layers + [num_batch]
+        batch_clf_sizes = [config.latent_sz] + config.batch_classifier_layers + [num_batch]
 
         self.bio_encoder = Encoder(bio_enc_sizes, dropout=config.dropout)
         self.batch_encoder = Encoder(batch_enc_sizes, dropout=config.dropout)
@@ -110,17 +110,17 @@ class IMCVAE(nn.Module):
 
 class GeneVAE(nn.Module):
     """VAE for scRNA-seq data batch effect correction with ZINB decoder."""
-    def __init__(self, config: ModelConfig):
+    def __init__(self, config: ModelConfig, in_sz: int, out_sz: int, num_batch: int):
         super().__init__()
         self.config = config
 
         # Build layer sizes
-        bio_enc_sizes = [config.in_sz] + config.bio_encoder_layers + [config.latent_sz]
-        batch_enc_sizes = [config.in_sz] + config.batch_encoder_layers + [config.latent_sz]
-        size_enc_sizes = [config.in_sz] + config.bio_encoder_layers + [1]
+        bio_enc_sizes = [in_sz] + config.bio_encoder_layers + [config.latent_sz]
+        batch_enc_sizes = [in_sz] + config.batch_encoder_layers + [config.latent_sz]
+        size_enc_sizes = [in_sz] + config.bio_encoder_layers + [1]
         dec_sizes = [2 * config.latent_sz] + config.decoder_layers + [1000]
-        bio_clf_sizes = [config.latent_sz] + config.bio_classifier_layers + [config.num_batch]
-        batch_clf_sizes = [config.latent_sz] + config.batch_classifier_layers + [config.num_batch]
+        bio_clf_sizes = [config.latent_sz] + config.bio_classifier_layers + [num_batch]
+        batch_clf_sizes = [config.latent_sz] + config.batch_classifier_layers + [num_batch]
 
         self.bio_encoder = Encoder(bio_enc_sizes, dropout=config.dropout)
         self.batch_encoder = Encoder(batch_enc_sizes, dropout=config.dropout)
@@ -128,9 +128,9 @@ class GeneVAE(nn.Module):
         self.decoder = Decoder(dec_sizes, dropout=config.dropout)
 
         # ZINB output layers
-        self.mean_decoder = nn.Sequential(nn.Linear(1000, config.out_sz), MeanAct())
-        self.disp_decoder = nn.Sequential(nn.Linear(1000, config.out_sz), DispAct())
-        self.dropout_decoder = nn.Sequential(nn.Linear(1000, config.out_sz), nn.Sigmoid())
+        self.mean_decoder = nn.Sequential(nn.Linear(1000, out_sz), MeanAct())
+        self.disp_decoder = nn.Sequential(nn.Linear(1000, out_sz), DispAct())
+        self.dropout_decoder = nn.Sequential(nn.Linear(1000, out_sz), nn.Sigmoid())
 
         self.bio_classifier = Classifier(bio_clf_sizes, dropout=config.dropout)
         self.batch_classifier = Classifier(batch_clf_sizes, dropout=config.dropout)

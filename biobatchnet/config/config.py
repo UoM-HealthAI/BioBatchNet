@@ -17,18 +17,14 @@ class DataConfig:
 @dataclass
 class ModelConfig:
     """Model architecture configuration."""
-    in_sz: int = 2000
-    out_sz: int = 2000
     latent_sz: int = 20
-    num_batch: int = 1
+    dropout: float = 0.1
 
-    bio_encoder_layers: List[int] = field(default_factory=lambda: [500, 2000, 2000])
-    batch_encoder_layers: List[int] = field(default_factory=lambda: [500])
-    decoder_layers: List[int] = field(default_factory=lambda: [2000, 2000, 500])
-    bio_classifier_layers: List[int] = field(default_factory=lambda: [500, 2000, 2000])
-    batch_classifier_layers: List[int] = field(default_factory=lambda: [128])
-
-    dropout: float = 0.3
+    bio_encoder_layers: List[int] = field(default_factory=lambda: [512, 2048, 2048])
+    batch_encoder_layers: List[int] = field(default_factory=lambda: [512])
+    decoder_layers: List[int] = field(default_factory=lambda: [2048, 2048, 512])
+    bio_classifier_layers: List[int] = field(default_factory=lambda: [512, 2048, 2048])
+    batch_classifier_layers: List[int] = field(default_factory=lambda: [512])
 
 
 @dataclass

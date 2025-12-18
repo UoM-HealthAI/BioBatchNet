@@ -34,6 +34,10 @@ def train(config: Config, seed: int = 42):
         cell_type_key=config.data.cell_type_key,
     )
 
+    # Infer model dimensions from data
+    in_sz = data.shape[1]
+    num_batch = len(np.unique(batch_labels))
+
     dataset = BBNDataset(data, batch_labels, cell_types)
     dataloader = torch.utils.data.DataLoader(
         dataset,
@@ -44,7 +48,7 @@ def train(config: Config, seed: int = 42):
     )
 
     Module = IMCModule if config.mode == 'imc' else SeqModule
-    model = Module(config)
+    model = Module(config, in_sz, num_batch)
 
     callbacks = [
         EarlyStopping(monitor='loss', patience=config.trainer.early_stop, mode='min'),

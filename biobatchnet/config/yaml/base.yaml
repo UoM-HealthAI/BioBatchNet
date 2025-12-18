@@ -7,12 +7,12 @@ model:
   out_sz: 2000
   latent_sz: 20
   num_batch: 1
-  bio_encoder_layers: [500, 2000, 2000]
-  batch_encoder_layers: [500]
-  decoder_layers: [2000, 2000, 500]
-  bio_classifier_layers: [500, 2000, 2000]
-  batch_classifier_layers: [128]
-  dropout: 0.3
+  bio_encoder_layers: [512, 2048, 2048]
+  batch_encoder_layers: [512]
+  decoder_layers: [2048, 2048, 512]
+  bio_classifier_layers: [512, 2048, 2048]
+  batch_classifier_layers: [512]
+  dropout: 0.1
 
 loss:
   recon: 10.0

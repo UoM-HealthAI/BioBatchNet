@@ -9,10 +9,12 @@ from .config import Config
 
 
 class BaseBBNModule(pl.LightningModule):
-    def __init__(self, config: Config):
+    def __init__(self, config: Config, in_sz: int, num_batch: int):
         super().__init__()
         self.save_hyperparameters(ignore=['config'])
         self.config = config
+        self.in_sz = in_sz
+        self.num_batch = num_batch
         self.lw = config.loss
         self.ce_loss = nn.CrossEntropyLoss()
 
@@ -60,9 +62,9 @@ class BaseBBNModule(pl.LightningModule):
 
 
 class IMCModule(BaseBBNModule):
-    def __init__(self, config: Config):
-        super().__init__(config)
-        self.model = IMCVAE(config.model)
+    def __init__(self, config: Config, in_sz: int, num_batch: int):
+        super().__init__(config, in_sz, num_batch)
+        self.model = IMCVAE(config.model, in_sz, in_sz, num_batch)
         self.recon_loss = nn.MSELoss()
 
     def training_step(self, batch, batch_idx):
@@ -93,9 +95,9 @@ class IMCModule(BaseBBNModule):
 
 
 class SeqModule(BaseBBNModule):
-    def __init__(self, config: Config):
-        super().__init__(config)
-        self.model = GeneVAE(config.model)
+    def __init__(self, config: Config, in_sz: int, num_batch: int):
+        super().__init__(config, in_sz, num_batch)
+        self.model = GeneVAE(config.model, in_sz, in_sz, num_batch)
         self.recon_loss = ZINBLoss()
 
     def training_step(self, batch, batch_idx):
