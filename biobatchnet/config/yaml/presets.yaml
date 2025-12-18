@@ -27,6 +27,8 @@ hoch:
 immuncan:
   mode: imc
   data: /mnt/iusers01/fatpou01/compsci01/w29632hl/scratch/code/BatchEffect/BioBatchNet/Data/IMC/IMMUcan_batch.h5ad
+  trainer:
+    epochs: 10
   loss:
     recon: 10
     discriminator: 0.3

@@ -44,7 +44,7 @@ class TrainerConfig:
     """Training configuration."""
     epochs: int = 100
     batch_size: int = 128
-    lr: float = 1e-3
+    lr: float = 1e-4
     weight_decay: float = 1e-5
 
     # Scheduler

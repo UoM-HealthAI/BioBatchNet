@@ -25,8 +25,13 @@ def train(config: Config, seed: int = 42):
 
     # Setup save directory: saved/{name}/{timestamp}/seed_{seed}/
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    save_dir = SAVE_ROOT / config.name / timestamp / f'seed_{seed}'
+    run_dir = SAVE_ROOT / config.name / timestamp
+    run_dir.mkdir(parents=True, exist_ok=True)
+    save_dir = run_dir / f'seed_{seed}'
     save_dir.mkdir(parents=True, exist_ok=True)
+
+    # Save config (at run level, shared across seeds)
+    config.to_yaml(run_dir / 'config.yaml')
 
     # Load data
     data_path = config.data.path

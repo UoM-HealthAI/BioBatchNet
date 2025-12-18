@@ -6,15 +6,16 @@ import pandas as pd
 from scipy.sparse import issparse
 from scipy.stats import pearsonr
 from sklearn.feature_selection import mutual_info_regression
+from harmonypy import compute_lisi
+import anndata as ad
 
 
 def visualization(embedding, batch_labels, cell_types, save_path, batch_key='BATCH', label_key='celltype'):
-    import anndata as ad
     adata = ad.AnnData(embedding)
     adata.obs[batch_key] = pd.Categorical(batch_labels)
     adata.obs[label_key] = pd.Categorical(cell_types)
 
-    adata = sc.pp.subsample(adata, fraction=0.1, random_state=42, copy=True)
+    adata = sc.pp.subsample(adata, fraction=0.3, random_state=42, copy=True)
     sc.pp.neighbors(adata)
     sc.tl.umap(adata)
     sc.pl.umap(adata, color=[batch_key, label_key], frameon=False)
@@ -67,7 +68,9 @@ def evaluate(
     sc.pp.neighbors(adata_raw_sub, use_rep='X_pca')
 
     # Batch correction metrics
-    ilisi = scib.metrics.ilisi_graph(adata_sub, batch_key=batch_key, type_='embed', use_rep=embed)
+    # iLISI using harmonypy
+    lisi = compute_lisi(adata_sub.obsm[embed], adata_sub.obs, [batch_key])
+    ilisi = np.median(lisi[:, 0])
     graph_conn = scib.me.graph_connectivity(adata_sub, label_key=label_key)
     asw_batch = scib.me.silhouette_batch(adata_sub, batch_key=batch_key, label_key=label_key, embed=embed)
     pcr = scib.me.pcr_comparison(adata_raw_sub, adata_sub, covariate=batch_key, embed=embed)

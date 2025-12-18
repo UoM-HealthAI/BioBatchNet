@@ -41,10 +41,10 @@ class BaseBBNModule(pl.LightningModule):
             lr=tc.lr,
             weight_decay=tc.weight_decay,
         )
-        scheduler = torch.optim.lr_scheduler.StepLR(
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
             optimizer,
-            step_size=tc.scheduler_step,
-            gamma=tc.scheduler_gamma,
+            T_max=tc.epochs,
+            eta_min=1e-6,
         )
         return {'optimizer': optimizer, 'lr_scheduler': scheduler}
 
