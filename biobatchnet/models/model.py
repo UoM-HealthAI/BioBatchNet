@@ -10,8 +10,7 @@ from ..config import Config, ModelConfig
 
 
 @dataclass
-class IMCVAEOutput:
-    """Output of IMCVAE forward pass."""
+class IMCBioBatchNetOutput:
     bio_z: torch.Tensor
     bio_mu: torch.Tensor
     bio_logvar: torch.Tensor
@@ -24,8 +23,7 @@ class IMCVAEOutput:
 
 
 @dataclass
-class GeneVAEOutput:
-    """Output of GeneVAE forward pass."""
+class SeqBioBatchNetOutput:
     bio_z: torch.Tensor
     bio_mu: torch.Tensor
     bio_logvar: torch.Tensor
@@ -42,8 +40,7 @@ class GeneVAEOutput:
     size_logvar: torch.Tensor
 
 
-class IMCVAE(nn.Module):
-    """VAE for IMC data batch effect correction using MSE reconstruction."""
+class IMCBioBatchNet(nn.Module):
     def __init__(self, config: ModelConfig, in_sz: int, out_sz: int, num_batch: int):
         super().__init__()
         self.config = config
@@ -83,7 +80,7 @@ class IMCVAE(nn.Module):
         # Reconstruction
         reconstruction = self.decoder(z_combine)
 
-        return IMCVAEOutput(
+        return IMCBioBatchNetOutput(
             bio_z=bio_z,
             bio_mu=bio_mu,
             bio_logvar=bio_logvar,
@@ -108,8 +105,7 @@ class IMCVAE(nn.Module):
             return bio_z.cpu().numpy(), batch_z.cpu().numpy()
 
 
-class GeneVAE(nn.Module):
-    """VAE for scRNA-seq data batch effect correction with ZINB decoder."""
+class SeqBioBatchNet(nn.Module):
     def __init__(self, config: ModelConfig, in_sz: int, out_sz: int, num_batch: int):
         super().__init__()
         self.config = config
@@ -169,7 +165,7 @@ class GeneVAE(nn.Module):
         pi = self.dropout_decoder(h)
         pi = torch.clamp(pi, 1e-6, 1.0 - 1e-6)
 
-        return GeneVAEOutput(
+        return SeqBioBatchNetOutput(
             bio_z=bio_z,
             bio_mu=bio_mu,
             bio_logvar=bio_logvar,
@@ -209,3 +205,56 @@ class DispAct(nn.Module):
     """Activation for dispersion parameter."""
     def forward(self, x):
         return torch.clamp(F.softplus(x), min=1e-3, max=1e3)
+
+
+"""
+ablation study
+"""
+@dataclass
+class NOBatchOutput:
+    bio_z: torch.Tensor
+    bio_mu: torch.Tensor
+    bio_logvar: torch.Tensor
+    bio_batch_pred: torch.Tensor
+    reconstruction: torch.Tensor
+
+
+class NOBatch(nn.Module):
+    def __init__(self, config: ModelConfig, in_sz: int, out_sz: int, num_batch: int):
+        super().__init__()
+        self.config = config
+        bio_enc_sizes = [in_sz] + config.bio_encoder_layers + [config.latent_sz]
+        dec_sizes = [config.latent_sz] + config.decoder_layers + [out_sz]
+        bio_clf_sizes = [config.latent_sz] + config.bio_classifier_layers + [num_batch]
+
+        self.bio_encoder = Encoder(bio_enc_sizes, dropout=config.dropout)
+        self.decoder = Decoder(dec_sizes, dropout=config.dropout)
+        self.bio_classifier = Classifier(bio_clf_sizes, dropout=config.dropout)
+
+        self.grl = GRL(alpha=1.0)
+
+    def forward(self, x):
+        bio_z, bio_mu, bio_logvar = self.bio_encoder(x)
+
+        bio_z_grl = self.grl(bio_z)
+        bio_batch_pred = self.bio_classifier(bio_z_grl)
+
+        reconstruction = self.decoder(bio_z)
+
+        return NOBatchOutput(
+            bio_z=bio_z,
+            bio_mu=bio_mu,
+            bio_logvar=bio_logvar,
+            bio_batch_pred=bio_batch_pred,
+            reconstruction=reconstruction,
+        )
+
+    def get_embeddings(self, data):
+        self.eval()
+        device = next(self.parameters()).device
+        with torch.no_grad():
+            if isinstance(data, np.ndarray):
+                data = torch.FloatTensor(data)
+            data = data.to(device)
+            bio_z, _, _ = self.bio_encoder(data)
+            return bio_z.cpu().numpy()

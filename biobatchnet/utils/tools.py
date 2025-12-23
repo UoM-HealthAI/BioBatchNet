@@ -52,6 +52,7 @@ def load_adata(path: str, data_type: str, preprocess: bool = False, batch_key: s
     cell_types = pd.Categorical(adata.obs[cell_type_key]).codes if cell_type_key in adata.obs.columns else None
     return data, batch_labels, cell_types
 
+
 def evaluate(
     adata,
     adata_raw,

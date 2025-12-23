@@ -1,8 +1,8 @@
+"""Ablation study: train without batch encoder."""
 import argparse
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 import torch
 import numpy as np
@@ -12,36 +12,22 @@ from pytorch_lightning.callbacks import EarlyStopping
 from pytorch_lightning.loggers import WandbLogger
 
 from .config import Config
-from .module import IMCModule, SeqModule
+from .module import NOModule
 from .utils.dataset import BBNDataset
 from .utils.tools import load_adata, evaluate, independence_metrics
 
 SAVE_ROOT = Path(__file__).parent / 'saved'
 
 
-def set_nested_attr(obj, key: str, value):
-    """Set nested attribute like 'loss.discriminator'."""
-    parts = key.split('.')
-    for p in parts[:-1]:
-        obj = getattr(obj, p)
-    setattr(obj, parts[-1], value)
-
-
-def train(
-    config: Config,
-    seed: int = 42,
-    run_name: Optional[str] = None,
-    do_eval: bool = True,
-):
+def train(config: Config, seed: int = 42, run_name: str = None, do_eval: bool = True):
     pl.seed_everything(seed)
     config.seed = seed
 
     run_name = run_name or datetime.now().strftime('%Y%m%d_%H%M%S')
-    run_dir = SAVE_ROOT / config.preset / run_name
+    run_dir = SAVE_ROOT / f'{config.preset}_nobatch' / run_name
     run_dir.mkdir(parents=True, exist_ok=True)
     save_dir = run_dir / f'seed_{seed}'
     save_dir.mkdir(parents=True, exist_ok=True)
-
     config.to_yaml(run_dir / 'config.yaml')
 
     # Load data
@@ -71,8 +57,7 @@ def train(
         persistent_workers=True,
     )
 
-    Module = IMCModule if config.mode == 'imc' else SeqModule
-    model = Module(config, in_sz, num_batch, save_dir=save_dir)
+    model = NOModule(config, in_sz, num_batch, save_dir=save_dir)
 
     callbacks = [
         EarlyStopping(monitor='loss', patience=config.trainer.early_stop, mode='min'),
@@ -80,7 +65,7 @@ def train(
 
     logger = WandbLogger(
         project='biobatchnet',
-        name=f'{config.preset}_{run_name}_seed{seed}',
+        name=f'{config.preset}_nobatch_{run_name}_seed{seed}',
     )
 
     trainer = pl.Trainer(
@@ -97,13 +82,12 @@ def train(
 
     trainer.fit(model, dataloader)
 
-    # Get embeddings (always needed for UMAP)
+    # Get embeddings
     eval_loader = torch.utils.data.DataLoader(dataset, batch_size=config.trainer.batch_size, shuffle=False)
-    z_bio, z_batch = model.get_embeddings(eval_loader)
+    z_bio, _ = model.get_embeddings(eval_loader)
     adata.obsm['X_biobatchnet'] = z_bio
 
-    eval_metrics, inde_metrics = {}, {}
-
+    eval_metrics = {}
     if do_eval:
         eval_metrics = evaluate(
             adata, adata_raw,
@@ -115,54 +99,21 @@ def train(
         for k, v in eval_metrics.items():
             print(f"{k}: {v:.4f}")
 
-        inde_metrics = independence_metrics(z_bio, z_batch)
-        for k, v in inde_metrics.items():
-            print(f"{k}: {v:.4f}")
-
         with open(save_dir / 'metrics.json', 'w') as f:
-            json.dump({'eval': eval_metrics, 'independence': inde_metrics}, f, indent=2)
+            json.dump(eval_metrics, f, indent=2)
 
-    return model, adata, eval_metrics, inde_metrics
+    return model, adata, eval_metrics
 
 
 def main():
-    parser = argparse.ArgumentParser(description='BioBatchNet Training')
+    parser = argparse.ArgumentParser(description='BioBatchNet Ablation: No Batch Encoder')
     parser.add_argument('--config', type=str, required=True, help='Config YAML path or preset name')
     parser.add_argument('--seed', type=int, default=42, help='Random seed')
     parser.add_argument('--run_name', type=str, default=None, help='Run name (save dir + wandb)')
     parser.add_argument('--no-eval', action='store_true', help='Skip evaluation metrics')
-
-    # Config overrides (e.g., --loss.discriminator 0)
-    parser.add_argument('--loss.recon', type=float, default=None)
-    parser.add_argument('--loss.discriminator', type=float, default=None)
-    parser.add_argument('--loss.classifier', type=float, default=None)
-    parser.add_argument('--loss.ortho', type=float, default=None)
-    parser.add_argument('--loss.kl_bio', type=float, default=None)
-    parser.add_argument('--loss.kl_batch', type=float, default=None)
-    parser.add_argument('--trainer.epochs', type=int, default=None)
-    parser.add_argument('--trainer.batch_size', type=int, default=None)
-    parser.add_argument('--trainer.lr', type=float, default=None)
-
     args = parser.parse_args()
 
     config = Config.load(args.config)
-
-    # Apply overrides
-    overrides = {
-        'loss.recon': getattr(args, 'loss.recon'),
-        'loss.discriminator': getattr(args, 'loss.discriminator'),
-        'loss.classifier': getattr(args, 'loss.classifier'),
-        'loss.ortho': getattr(args, 'loss.ortho'),
-        'loss.kl_bio': getattr(args, 'loss.kl_bio'),
-        'loss.kl_batch': getattr(args, 'loss.kl_batch'),
-        'trainer.epochs': getattr(args, 'trainer.epochs'),
-        'trainer.batch_size': getattr(args, 'trainer.batch_size'),
-        'trainer.lr': getattr(args, 'trainer.lr'),
-    }
-    for key, value in overrides.items():
-        if value is not None:
-            set_nested_attr(config, key, value)
-
     train(config, args.seed, run_name=args.run_name, do_eval=not args.no_eval)
 
 

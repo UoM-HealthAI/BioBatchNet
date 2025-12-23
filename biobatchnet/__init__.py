@@ -1,4 +1,4 @@
-from .models.model import IMCVAE, GeneVAE
+from .models.model import IMCBioBatchNet, SeqBioBatchNet
 from .api import correct_batch_effects
 from .config import Config, ModelConfig, LossConfig, TrainerConfig
 from .train import train
@@ -15,8 +15,8 @@ except PackageNotFoundError:
     __version__ = "0+unknown"
 
 __all__ = [
-    "IMCVAE",
-    "GeneVAE",
+    "IMCBioBatchNet",
+    "SeqBioBatchNet",
     "IMCModule",
     "SeqModule",
     "correct_batch_effects",

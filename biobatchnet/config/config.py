@@ -67,7 +67,6 @@ class TrainerConfig:
 @dataclass
 class Config:
     """Master configuration."""
-    name: str = "experiment"
     mode: str = "imc"  # "imc" or "seq"
     seed: int = 42
     preset: str = ""  # dataset key in presets.yaml (e.g. "damond", "pancreas")
@@ -122,7 +121,6 @@ class Config:
 
         preset = presets[dataset]
         return {
-            'name': dataset,
             'mode': preset['mode'],
             'preset': dataset,
             'data': {'path': preset.get('data')},
@@ -135,7 +133,6 @@ class Config:
     def _from_dict(cls, d: dict) -> 'Config':
         """Create Config from dictionary."""
         return cls(
-            name=d.get('name', 'experiment'),
             mode=d.get('mode', 'imc'),
             seed=d.get('seed', 42),
             preset=d.get('preset', ''),
@@ -148,7 +145,6 @@ class Config:
     def to_yaml(self, yaml_path: str):
         """Save configuration to YAML file."""
         config_dict = {
-            'name': self.name,
             'mode': self.mode,
             'seed': self.seed,
             'preset': self.preset,

@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
 class RBF(nn.Module):
     def __init__(self, n_kernels=5, mul_factor=2.0, bandwidth=None):
         super().__init__()

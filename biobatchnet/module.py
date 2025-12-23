@@ -1,9 +1,10 @@
 """PyTorch Lightning modules for BioBatchNet."""
 import torch
 import torch.nn as nn
+import numpy as np
 import pytorch_lightning as pl
 
-from .models.model import IMCVAE, GeneVAE
+from .models.model import IMCBioBatchNet, SeqBioBatchNet, NOBatch
 from .utils.loss import kl_divergence, orthogonal_loss, ZINBLoss
 from .utils.tools import visualization
 from .config import Config
@@ -56,11 +57,13 @@ class BaseBBNModule(pl.LightningModule):
         with torch.no_grad():
             for batch in dataloader:
                 data = batch[0].to(self.device)
-                out = self(data)
-                bio_z_list.append(out.bio_z.cpu())
-                batch_z_list.append(out.batch_z.cpu())
+                bio_z, batch_z  = self.model.get_embeddings(data)
+                bio_z_list.append(bio_z)
+                batch_z_list.append(batch_z)
 
-        return torch.cat(bio_z_list).numpy(), torch.cat(batch_z_list).numpy()
+        bio_z = np.concatenate(bio_z_list, axis=0) if bio_z_list else None
+        batch_z = np.concatenate(batch_z_list, axis=0) if batch_z_list else None
+        return bio_z, batch_z
 
     def on_train_epoch_end(self):
         epoch = self.current_epoch + 1
@@ -77,7 +80,7 @@ class BaseBBNModule(pl.LightningModule):
 class IMCModule(BaseBBNModule):
     def __init__(self, config: Config, in_sz: int, num_batch: int, save_dir=None):
         super().__init__(config, in_sz, num_batch, save_dir)
-        self.model = IMCVAE(config.model, in_sz, in_sz, num_batch)
+        self.model = IMCBioBatchNet(config.model, in_sz, in_sz, num_batch)
         self.recon_loss = nn.MSELoss()
 
     def training_step(self, batch, batch_idx):
@@ -110,7 +113,7 @@ class IMCModule(BaseBBNModule):
 class SeqModule(BaseBBNModule):
     def __init__(self, config: Config, in_sz: int, num_batch: int, save_dir=None):
         super().__init__(config, in_sz, num_batch, save_dir)
-        self.model = GeneVAE(config.model, in_sz, in_sz, num_batch)
+        self.model = SeqBioBatchNet(config.model, in_sz, in_sz, num_batch)
         self.recon_loss = ZINBLoss()
 
     def training_step(self, batch, batch_idx):
@@ -142,3 +145,43 @@ class SeqModule(BaseBBNModule):
 
         self._log_metrics(loss, recon_loss, discriminator_loss, classifier_loss, kl_bio, kl_batch, ortho_loss, bio_acc, batch_acc)
         return loss
+
+
+class NOModule(BaseBBNModule):
+    def __init__(self, config: Config, in_sz: int, num_batch: int, save_dir=None):
+        super().__init__(config, in_sz, num_batch, save_dir)
+        self.model = NOBatch(config.model, in_sz, in_sz, num_batch)
+        self.recon_loss = nn.MSELoss()
+
+    def training_step(self, batch, batch_idx):
+        data, batch_id, *_ = batch
+        out = self(data)
+        recon_loss = self.recon_loss(data, out.reconstruction)
+        kl_bio = kl_divergence(out.bio_mu, out.bio_logvar).mean()
+        discriminator_loss = self.ce_loss(out.bio_batch_pred, batch_id)
+        loss = (
+            self.lw.recon * recon_loss +
+            self.lw.discriminator * discriminator_loss +
+            self.lw.kl_bio * kl_bio
+        )
+        bio_acc = (out.bio_batch_pred.argmax(1) == batch_id).float().mean()
+        self._log_metrics(loss, recon_loss, discriminator_loss, kl_bio, bio_acc)
+        return loss
+
+    def _log_metrics(self, loss, recon_loss, discriminator_loss, kl_bio, bio_acc):
+        self.log('loss', loss, prog_bar=True, on_step=True, on_epoch=True)
+        self.log('recon_loss', recon_loss, on_step=True, on_epoch=True)
+        self.log('discriminator_loss', discriminator_loss, on_step=True, on_epoch=True)
+        self.log('kl_bio', kl_bio, on_step=True, on_epoch=True)
+        self.log('bio_acc', bio_acc, prog_bar=True, on_step=True, on_epoch=True)
+
+    def get_embeddings(self, dataloader):
+        self.eval()
+        bio_z_list = []
+        with torch.no_grad():
+            for batch in dataloader:
+                data = batch[0].to(self.device)
+                bio_z = self.model.get_embeddings(data)
+                bio_z_list.append(bio_z)
+        bio_z = np.concatenate(bio_z_list, axis=0) if bio_z_list else None
+        return bio_z, None
