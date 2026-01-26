@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 
 from config import BaselineConfig
-from run_utils import RunBaseline
+from engines import RunBaseline
 from utils import save_all_adata, load_all_adata, get_save_dir, logger
 
 
@@ -27,7 +27,7 @@ def main(config, dataset_name):
 
     # Run and evaluate
     rb = RunBaseline(adata, config, dataset_config)
-    results, all_adata, timing_stats = rb.run_and_evaluate()
+    results, timing_stats, all_adata = rb.run_all_seeds_and_evaluate()
 
     # Save evaluation results
     results_path = os.path.join(save_dir, 'results.csv')

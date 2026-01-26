@@ -43,8 +43,9 @@ def load_h5ad_files(directory):
         'Scanorama.h5ad': 'Scanorama',
         'Combat.h5ad': 'Combat',
         'iMAP.h5ad': 'iMAP',
-        'scDREAMER.h5ad': 'scDREAMER',
-        'scDML.h5ad': 'scDML',
+        'CombatSeq.h5ad': 'CombatSeq',
+        'SeuratRPCA.h5ad': 'Seurat',
+        'FastMNN.h5ad': 'FastMNN',
         'BioBatchNet.h5ad': 'BioBatchNet',
     }
 
