@@ -1,6 +1,6 @@
 damond:
   mode: imc
-  data: /mnt/iusers01/fatpou01/compsci01/w29632hl/scratch/code/BatchEffect/BioBatchNet/Data/IMC/subDamond_full.h5ad
+  data: /home/w29632hl/code/BatchEffect/BioBatchNet/DATA/IMC/subDamond_full.h5ad
   loss:
     recon: 10
     discriminator: 0.3
@@ -13,7 +13,7 @@ damond:
 
 hoch:
   mode: imc
-  data: /mnt/iusers01/fatpou01/compsci01/w29632hl/scratch/code/BatchEffect/BioBatchNet/Data/IMC/HochSchulz.h5ad
+  data: /home/w29632hl/code/BatchEffect/BioBatchNet/DATA/IMC/HochSchulz.h5ad
   loss:
     recon: 10
     discriminator: 0.1
@@ -26,7 +26,7 @@ hoch:
 
 immuncan:
   mode: imc
-  data: /mnt/iusers01/fatpou01/compsci01/w29632hl/scratch/code/BatchEffect/BioBatchNet/Data/IMC/IMMUcan_batch.h5ad
+  data: /home/w29632hl/code/BatchEffect/BioBatchNet/DATA/IMC/IMMUcan_batch.h5ad
   trainer:
     epochs: 50
   loss:

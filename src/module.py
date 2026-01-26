@@ -25,15 +25,15 @@ class BaseBBNModule(pl.LightningModule):
         return self.model(x)
 
     def _log_metrics(self, loss, recon_loss, discriminator_loss, classifier_loss, kl_bio, kl_batch, ortho_loss, bio_acc, batch_acc):
-        self.log('loss', loss, prog_bar=True, on_step=True, on_epoch=True)
-        self.log('recon_loss', recon_loss, on_step=True, on_epoch=True)
-        self.log('discriminator_loss', discriminator_loss, on_step=True, on_epoch=True)
-        self.log('classifier_loss', classifier_loss, on_step=True, on_epoch=True)
-        self.log('kl_bio', kl_bio, on_step=True, on_epoch=True)
-        self.log('kl_batch', kl_batch, on_step=True, on_epoch=True)
-        self.log('ortho_loss', ortho_loss, on_step=True, on_epoch=True)
-        self.log('bio_acc', bio_acc, prog_bar=True, on_step=True, on_epoch=True)
-        self.log('batch_acc', batch_acc, prog_bar=True, on_step=True, on_epoch=True)
+        self.log('loss', loss, prog_bar=True, on_step=True, on_epoch=True, sync_dist=True)
+        self.log('recon_loss', recon_loss, on_step=True, on_epoch=True, sync_dist=True)
+        self.log('discriminator_loss', discriminator_loss, on_step=True, on_epoch=True, sync_dist=True)
+        self.log('classifier_loss', classifier_loss, on_step=True, on_epoch=True, sync_dist=True)
+        self.log('kl_bio', kl_bio, on_step=True, on_epoch=True, sync_dist=True)
+        self.log('kl_batch', kl_batch, on_step=True, on_epoch=True, sync_dist=True)
+        self.log('ortho_loss', ortho_loss, on_step=True, on_epoch=True, sync_dist=True)
+        self.log('bio_acc', bio_acc, prog_bar=True, on_step=True, on_epoch=True, sync_dist=True)
+        self.log('batch_acc', batch_acc, prog_bar=True, on_step=True, on_epoch=True, sync_dist=True)
 
     def configure_optimizers(self):
         tc = self.config.trainer
@@ -66,6 +66,9 @@ class BaseBBNModule(pl.LightningModule):
         return bio_z, batch_z
 
     def on_train_epoch_end(self):
+        # Only save on rank 0 to avoid duplicate saves in multi-GPU training
+        if self.trainer.global_rank != 0:
+            return
         epoch = self.current_epoch + 1
         if self.save_dir and epoch % self.config.trainer.save_period == 0:
             dataset = self.trainer.train_dataloader.dataset
@@ -147,7 +150,7 @@ class SeqModule(BaseBBNModule):
         return loss
 
 
-class NOModule(BaseBBNModule):
+class NOBatchModule(BaseBBNModule):
     def __init__(self, config: Config, in_sz: int, num_batch: int, save_dir=None):
         super().__init__(config, in_sz, num_batch, save_dir)
         self.model = NOBatch(config.model, in_sz, in_sz, num_batch)
@@ -169,11 +172,11 @@ class NOModule(BaseBBNModule):
         return loss
 
     def _log_metrics(self, loss, recon_loss, discriminator_loss, kl_bio, bio_acc):
-        self.log('loss', loss, prog_bar=True, on_step=True, on_epoch=True)
-        self.log('recon_loss', recon_loss, on_step=True, on_epoch=True)
-        self.log('discriminator_loss', discriminator_loss, on_step=True, on_epoch=True)
-        self.log('kl_bio', kl_bio, on_step=True, on_epoch=True)
-        self.log('bio_acc', bio_acc, prog_bar=True, on_step=True, on_epoch=True)
+        self.log('loss', loss, prog_bar=True, on_step=True, on_epoch=True, sync_dist=True)
+        self.log('recon_loss', recon_loss, on_step=True, on_epoch=True, sync_dist=True)
+        self.log('discriminator_loss', discriminator_loss, on_step=True, on_epoch=True, sync_dist=True)
+        self.log('kl_bio', kl_bio, on_step=True, on_epoch=True, sync_dist=True)
+        self.log('bio_acc', bio_acc, prog_bar=True, on_step=True, on_epoch=True, sync_dist=True)
 
     def get_embeddings(self, dataloader):
         self.eval()

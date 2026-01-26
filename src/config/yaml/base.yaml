@@ -26,13 +26,13 @@ loss:
 trainer:
   epochs: 100
   batch_size: 128
-  lr: 0.001
-  weight_decay: 0.00001
+  lr: 3e-4
+  weight_decay: 0.01
   scheduler_step: 50
   scheduler_gamma: 0.1
-  early_stop: 15
+  early_stop: 5
   save_dir: ./saved/
-  save_period: 20
+  save_period: 10
   verbosity: 2
   sampling_fraction: 1.0
   eval_seed: 42

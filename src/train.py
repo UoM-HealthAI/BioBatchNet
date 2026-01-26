@@ -1,5 +1,6 @@
 import argparse
 import json
+import csv
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -27,22 +28,13 @@ def set_nested_attr(obj, key: str, value):
     setattr(obj, parts[-1], value)
 
 
-def train(
-    config: Config,
-    seed: int = 42,
-    run_name: Optional[str] = None,
-    do_eval: bool = True,
-):
+def train(config: Config, seed: int = 42, run_name: Optional[str] = None, do_eval: bool = True):
     pl.seed_everything(seed)
     config.seed = seed
 
     run_name = run_name or datetime.now().strftime('%Y%m%d_%H%M%S')
     run_dir = SAVE_ROOT / config.preset / run_name
-    run_dir.mkdir(parents=True, exist_ok=True)
     save_dir = run_dir / f'seed_{seed}'
-    save_dir.mkdir(parents=True, exist_ok=True)
-
-    config.to_yaml(run_dir / 'config.yaml')
 
     # Load data
     data_path = config.data.path
@@ -92,35 +84,58 @@ def train(
         accelerator='auto',
     )
 
+    # In DDP, every rank may hit filesystem writes later; ensure dirs exist everywhere.
+    run_dir.mkdir(parents=True, exist_ok=True)
+    save_dir.mkdir(parents=True, exist_ok=True)
+    if trainer.is_global_zero:
+        config.to_yaml(run_dir / 'config.yaml')
+
     n = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print("trainable_params:", n)
 
     trainer.fit(model, dataloader)
 
-    # Get embeddings (always needed for UMAP)
-    eval_loader = torch.utils.data.DataLoader(dataset, batch_size=config.trainer.batch_size, shuffle=False)
-    z_bio, z_batch = model.get_embeddings(eval_loader)
-    adata.obsm['X_biobatchnet'] = z_bio
-
     eval_metrics, inde_metrics = {}, {}
+    if trainer.is_global_zero:
+        # Get embeddings / eval only once to avoid multi-rank conflicts.
+        eval_loader = torch.utils.data.DataLoader(dataset, batch_size=config.trainer.batch_size, shuffle=False)
+        z_bio, z_batch = model.get_embeddings(eval_loader)
+        adata.obsm['X_biobatchnet'] = z_bio
 
-    if do_eval:
-        eval_metrics = evaluate(
-            adata, adata_raw,
-            embed='X_biobatchnet',
-            batch_key=config.data.batch_key,
-            label_key=config.data.cell_type_key,
-            fraction=config.trainer.sampling_fraction,
-        )
-        for k, v in eval_metrics.items():
-            print(f"{k}: {v:.4f}")
+        if do_eval:
+            eval_metrics = evaluate(
+                adata, adata_raw,
+                embed='X_biobatchnet',
+                batch_key=config.data.batch_key,
+                label_key=config.data.cell_type_key,
+                fraction=config.trainer.sampling_fraction,
+            )
+            for k, v in eval_metrics.items():
+                print(f"{k}: {v:.4f}")
 
-        inde_metrics = independence_metrics(z_bio, z_batch)
-        for k, v in inde_metrics.items():
-            print(f"{k}: {v:.4f}")
+            inde_metrics = independence_metrics(z_bio, z_batch)
+            for k, v in inde_metrics.items():
+                print(f"{k}: {v:.4f}")
 
-        with open(save_dir / 'metrics.json', 'w') as f:
-            json.dump({'eval': eval_metrics, 'independence': inde_metrics}, f, indent=2)
+        # Cast numpy/torch scalars to Python floats for serialization
+        eval_metrics = {k: float(v) for k, v in eval_metrics.items()}
+        inde_metrics = {k: float(v) for k, v in inde_metrics.items()}
+
+        # Also save a simple CSV row where metrics dicts are stored as strings
+        csv_path = save_dir / 'metrics.csv'
+        write_header = not csv_path.exists()
+        with open(csv_path, 'a', newline='') as f:
+            w = csv.DictWriter(f, fieldnames=['preset', 'run_name', 'seed', 'eval', 'independence'])
+            if write_header:
+                w.writeheader()
+            w.writerow({
+                'preset': config.preset,
+                'run_name': run_name,
+                'seed': seed,
+                'eval': json.dumps(eval_metrics),
+                'independence': json.dumps(inde_metrics),
+            })
+
 
     return model, adata, eval_metrics, inde_metrics
 

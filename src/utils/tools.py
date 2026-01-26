@@ -6,7 +6,7 @@ import pandas as pd
 from scipy.sparse import issparse
 from scipy.stats import pearsonr
 from sklearn.feature_selection import mutual_info_regression
-from harmonypy import compute_lisi
+from sklearn.metrics import adjusted_rand_score, normalized_mutual_info_score
 import anndata as ad
 
 
@@ -21,6 +21,19 @@ def visualization(embedding, batch_labels, cell_types, save_path, batch_key='BAT
     sc.pl.umap(adata, color=[batch_key, label_key], frameon=False)
     plt.savefig(save_path)
     plt.close()
+
+
+def best_leiden_by_nmi(adata: sc.AnnData, label_key: str, resolutions=(0.2, 0.4, 0.6, 0.8, 1.0)):
+    best = (-1.0, -1.0, None) 
+    y = adata.obs[label_key].values
+    for r in resolutions:
+        sc.tl.leiden(adata, key_added='cluster', resolution=r)
+        pred = adata.obs['cluster'].values
+        nmi = normalized_mutual_info_score(y, pred)
+        ari = adjusted_rand_score(y, pred)
+        if nmi > best[0]:
+            best = (nmi, ari, r)
+    return best
 
 
 def seq_preprocess(adata: sc.AnnData) -> sc.AnnData:
@@ -69,18 +82,16 @@ def evaluate(
     sc.pp.neighbors(adata_raw_sub, use_rep='X_pca')
 
     # Batch correction metrics
-    # iLISI using harmonypy
-    lisi = compute_lisi(adata_sub.obsm[embed], adata_sub.obs, [batch_key])
-    ilisi = np.median(lisi[:, 0])
+    ilisi = scib.metrics.ilisi_graph(adata_sub, batch_key=batch_key, type_='embed', use_rep=embed)
     graph_conn = scib.me.graph_connectivity(adata_sub, label_key=label_key)
     asw_batch = scib.me.silhouette_batch(adata_sub, batch_key=batch_key, label_key=label_key, embed=embed)
     pcr = scib.me.pcr_comparison(adata_raw_sub, adata_sub, covariate=batch_key, embed=embed)
 
     # Biological conservation metrics
     asw_cell = scib.me.silhouette(adata_sub, label_key=label_key, embed=embed)
-    scib.me.cluster_optimal_resolution(adata_sub, cluster_key='cluster', label_key=label_key)
-    ari = scib.me.ari(adata_sub, cluster_key='cluster', label_key=label_key)
-    nmi = scib.me.nmi(adata_sub, cluster_key='cluster', label_key=label_key)
+    sc.tl.leiden(adata_sub, key_added='cluster', resolution=0.4)
+    nmi = normalized_mutual_info_score(adata_sub.obs[label_key].values, adata_sub.obs['cluster'].values)
+    ari = adjusted_rand_score(adata_sub.obs[label_key].values, adata_sub.obs['cluster'].values)
 
     # Aggregate scores
     batch_score = (ilisi + graph_conn + asw_batch + pcr) / 4

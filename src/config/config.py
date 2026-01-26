@@ -56,7 +56,7 @@ class TrainerConfig:
 
     # Logging
     save_dir: str = "./saved/"
-    save_period: int = 20
+    save_period: int = 10
     verbosity: int = 2
 
     # Evaluation
