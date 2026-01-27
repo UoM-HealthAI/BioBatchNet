@@ -4,45 +4,26 @@
 methods:
   scVI:
     embed: X_scvi
-    need_pca: false
-    type: nn
-    preprocess: [hvg]
-
   iMAP:
     embed: X_imap
-    need_pca: true
-    type: nn
-    preprocess: [hvg, normalize, log1p]
-
   MRVI:
     embed: X_mrvi
-    need_pca: false
-    type: nn
-    preprocess: [hvg]
-
   Harmony:
     embed: X_pca_harmony
-    need_pca: false
-    type: non_nn
-    preprocess: [hvg, normalize, log1p, pca]
-
   BBKNN:
-    embed: X_bbknn
-    need_pca: false
-    type: non_nn
-    preprocess: [hvg, normalize, log1p, pca]
-
+    embed: X_pca
   Scanorama:
     embed: X_scanorama
-    need_pca: false
-    type: non_nn
-    preprocess: [hvg, normalize, log1p, pca]
-
   Combat:
     embed: X_combat
-    need_pca: true
-    type: non_nn
-    preprocess: [hvg, normalize, log1p]
+  CombatSeq:
+    embed: X_combatseq
+  SeuratCCA:
+    embed: X_seurat_cca
+  SeuratRPCA:
+    embed: X_seurat_rpca
+  FastMNN:
+    embed: X_fastmnn
 
 # Dataset configurations
 datasets:
@@ -68,21 +49,21 @@ datasets:
     seed_list: [42, 52, 62, 72, 82]
 
   pancreas:
-    path: ../Data/scRNA-seq/pancreas.h5ad
+    path: /home/w29632hl/code/BatchEffect/BioBatchNet/DATA/scRNA/pancreas.h5ad
     mode: seq
     sampling_fraction: 1.0
     sampling_seed: 42
     seed_list: [42, 52, 62, 72, 82]
 
   macaque:
-    path: ../Data/scRNA-seq/macaque.h5ad
+    path: /home/w29632hl/code/BatchEffect/BioBatchNet/DATA/scRNA/macaque.h5ad
     mode: seq
     sampling_fraction: 1.0
     sampling_seed: 42
     seed_list: [42, 52, 62, 72, 82]
 
   SubMouseBrain:
-    path: ../Data/scRNA-seq/SubMouseBrain.h5ad
+    path: /home/w29632hl/code/BatchEffect/BioBatchNet/DATA/scRNA/mousebrain.h5ad
     mode: seq
     sampling_fraction: 1.0
     sampling_seed: 42

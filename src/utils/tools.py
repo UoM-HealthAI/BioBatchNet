@@ -89,9 +89,7 @@ def evaluate(
 
     # Biological conservation metrics
     asw_cell = scib.me.silhouette(adata_sub, label_key=label_key, embed=embed)
-    sc.tl.leiden(adata_sub, key_added='cluster', resolution=0.4)
-    nmi = normalized_mutual_info_score(adata_sub.obs[label_key].values, adata_sub.obs['cluster'].values)
-    ari = adjusted_rand_score(adata_sub.obs[label_key].values, adata_sub.obs['cluster'].values)
+    nmi, ari, _best_r = best_leiden_by_nmi(adata_sub, label_key)
 
     # Aggregate scores
     batch_score = (ilisi + graph_conn + asw_batch + pcr) / 4

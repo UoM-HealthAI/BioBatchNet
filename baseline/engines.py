@@ -3,18 +3,13 @@
 
 import scanpy as sc
 from scipy.sparse import issparse
-import scvi
-import bbknn
-import imap
 import pandas as pd
 import numpy as np
 import torch
 import gc
 import time
-from inmoose.pycombat import pycombat_seq
 
 from utils import logger
-from config import BaselineConfig
 from evaluation import evaluate
 from r_methods import RBackend
 
@@ -38,10 +33,10 @@ class RunBaseline:
         self.timing_results = {}
 
         self.r_backend = RBackend(
-            scripts_dir="scripts_r",
+            scripts_dir=".",
             logger=logger,
             r_bin="Rscript",
-            conda_env="r_baselines",   
+            conda_env="r_baselines",
         )
 
     def _set_seed(self, seed):
@@ -90,7 +85,7 @@ class RunBaseline:
         elif method_name == 'Combat':
             result = self._run_combat(adata_base.copy())
         elif method_name == 'CombatSeq':
-            result = self._run_combatseq(adata_base.copy())
+            result = self.r_backend.combatseq(adata_base.copy())
         elif method_name == "SeuratCCA":
             result = self.r_backend.seurat(adata_base.copy(), method="cca")
         elif method_name == "SeuratRPCA":
@@ -108,8 +103,6 @@ class RunBaseline:
         """
         Run a single method for one seed without evaluation.
         """
-        if method_name not in self.config.methods.keys():
-            raise ValueError(f"Method '{method_name}' not found. Available methods: {list(self.config.methods.keys())}")
         
         self._set_seed(seed)
         adata_base = self.adata.copy()
@@ -200,7 +193,8 @@ class RunBaseline:
         return final_results, timing_stats, first_adata
 
     def _run_scvi(self, adata):
-        adata = self.ensure_counts_layer(adata)
+        import scvi
+        adata = self._ensure_counts_layer(adata)
         sc.pp.highly_variable_genes(adata, n_top_genes=2000, flavor="seurat_v3", subset=True, layer="counts")
         scvi.model.SCVI.setup_anndata(adata, batch_key="BATCH", layer="counts")
         model = scvi.model.SCVI(adata, gene_likelihood=("normal" if self.mode=="imc" else "zinb"))
@@ -209,7 +203,8 @@ class RunBaseline:
         return adata
     
     def _run_mrvi(self, adata):
-        adata = self.ensure_counts_layer(adata)
+        import scvi
+        adata = self._ensure_counts_layer(adata)
         sc.pp.highly_variable_genes(adata, n_top_genes=2000, flavor="seurat_v3",
                                     subset=True, layer="counts")
         scvi.external.MRVI.setup_anndata(adata, sample_key="BATCH", layer="counts")
@@ -219,6 +214,7 @@ class RunBaseline:
         return adata
 
     def _run_imap(self, adata, seed):
+        import imap
         adata = self._seq_process(adata)
         EC, ec_data = imap.stage1.iMAP_fast(adata, key="batch", n_epochs=150, seed=seed)
         output = imap.stage2.integrate_data(adata, ec_data, inc=False, n_epochs=150, seed=seed)
@@ -237,6 +233,7 @@ class RunBaseline:
         return adata
 
     def _run_bbknn(self, adata):
+        import bbknn
         adata = self._seq_process(adata)
         sc.tl.pca(adata, svd_solver='arpack')
         bbknn.bbknn(adata, batch_key="BATCH")
@@ -255,36 +252,4 @@ class RunBaseline:
         sc.pp.combat(adata, key='BATCH')
         sc.pp.pca(adata)
         adata.obsm['X_combat'] = adata.obsm['X_pca']
-        return adata
-
-    def _run_combatseq(
-        self,
-        adata,
-        batch_key="BATCH",
-        counts_layer="counts",
-        out_rep="X_combatseq",
-    ):
-
-        adata = adata.copy()
-
-        tmp = adata.copy()
-        tmp.X = tmp.layers[counts_layer]
-        sc.pp.highly_variable_genes(tmp, n_top_genes=2000, flavor="seurat_v3", subset=False)
-        hvg_genes = tmp.var_names[tmp.var["highly_variable"]]
-
-        # counts (cell×gene) -> (gene×cell) -> combatseq -> corrected (cell×gene)
-        ad_hvg = adata[:, hvg_genes].copy()
-        X = ad_hvg.layers[counts_layer]
-        X = X.toarray() if issparse(X) else np.asarray(X)
-        batch = ad_hvg.obs[batch_key].astype(str).to_numpy()
-
-        corrected = np.asarray(pycombat_seq(counts=X.T, batch=batch)).T
-
-        # embedding: normalize+log1p+pca on corrected counts
-        work = sc.AnnData(X=corrected, obs=ad_hvg.obs.copy(), var=ad_hvg.var.copy())
-        sc.pp.normalize_total(work, target_sum=1e4)
-        sc.pp.log1p(work)
-        sc.pp.pca(work, n_comps=50)
-
-        adata.obsm[out_rep] = work.obsm["X_pca"]
         return adata

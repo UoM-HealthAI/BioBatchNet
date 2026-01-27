@@ -1,15 +1,11 @@
 from dataclasses import dataclass, field
 from typing import Dict, List
 import yaml
-from pathlib import Path
 
 
 @dataclass
 class MethodConfig:
     embed: str
-    need_pca: bool
-    type: str  # 'nn' or 'non_nn'
-    preprocess: List[str]  # ['hvg', 'normalize', 'log1p', 'pca']
 
 
 @dataclass
@@ -34,12 +30,7 @@ class BaselineConfig:
 
         methods = {}
         for name, cfg in data.get('methods', {}).items():
-            methods[name] = MethodConfig(
-                embed=cfg['embed'],
-                need_pca=cfg['need_pca'],
-                type=cfg['type'],
-                preprocess=cfg['preprocess']
-            )
+            methods[name] = MethodConfig(embed=cfg['embed'])
 
         datasets = {}
         for name, cfg in data.get('datasets', {}).items():
@@ -52,14 +43,6 @@ class BaselineConfig:
             )
 
         return cls(methods=methods, datasets=datasets)
-
-    def get_nn_methods(self) -> Dict[str, MethodConfig]:
-        """Return methods of type 'nn'."""
-        return {k: v for k, v in self.methods.items() if v.type == 'nn'}
-
-    def get_non_nn_methods(self) -> Dict[str, MethodConfig]:
-        """Return methods of type 'non_nn'."""
-        return {k: v for k, v in self.methods.items() if v.type == 'non_nn'}
 
     def get_method(self, name: str) -> MethodConfig:
         """Get a specific method config by name."""

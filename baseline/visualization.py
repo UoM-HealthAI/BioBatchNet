@@ -128,20 +128,31 @@ def visualize(adata_dict, config, save_dir, other_methods=None):
     logger.info(f"Visualization completed. Plots saved to {save_dir}")
 
 
-def main(config, dataset_name, other_methods=None):
+def load_adata_from_dir(save_dir):
+    """Load all h5ad files from directory."""
+    adata_dict = {}
+    for f in Path(save_dir).glob("*.h5ad"):
+        method = f.stem
+        adata_dict[method] = sc.read_h5ad(f)
+        logger.info(f"Loaded {method}")
+    return adata_dict
+
+
+def main(config, save_dir, other_methods=None):
     """
     Load saved adata and visualize.
 
     Args:
         config: BaselineConfig object
-        dataset_name: Name of the dataset
+        save_dir: Directory containing h5ad files
         other_methods: Dict of additional methods {'method': 'path.h5ad'}
     """
-    dataset_config = config.get_dataset(dataset_name)
-    save_dir = get_save_dir(dataset_config, dataset_name)
-
-    # Load saved adata
-    adata_dict = load_all_adata(save_dir)
+    # Load saved adata (try adata_results subdir first, then direct)
+    adata_results_dir = os.path.join(save_dir, 'adata_results')
+    if os.path.exists(adata_results_dir):
+        adata_dict = load_all_adata(save_dir)
+    else:
+        adata_dict = load_adata_from_dir(save_dir)
 
     # Visualize
     vis_dir = os.path.join(save_dir, 'visualization')
@@ -152,14 +163,14 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description='Visualize baseline results')
-    parser.add_argument('--dataset', type=str, required=True,
-                       help='Dataset name to visualize')
+    parser.add_argument('--save_dir', type=str, required=True,
+                       help='Directory containing h5ad files')
     args = parser.parse_args()
 
     logger.info("Visualization script started.")
 
-    config_path = Path(__file__).parent / "baseline_config.yaml"
+    config_path = Path(__file__).parent / "config.yaml"
     config = BaselineConfig.load(config_path)
 
-    main(config, args.dataset)
+    main(config, args.save_dir)
     logger.info("Visualization finished.")

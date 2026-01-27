@@ -2,6 +2,20 @@ import scanpy as sc
 import scib
 import numpy as np
 from config import BaselineConfig
+from sklearn.metrics import adjusted_rand_score, normalized_mutual_info_score
+
+
+def best_leiden_by_nmi(adata: sc.AnnData, label_key: str, resolutions=(0.2, 0.4, 0.6, 0.8, 1.0)):
+    best = (-1.0, -1.0, None)
+    y = adata.obs[label_key].values
+    for r in resolutions:
+        sc.tl.leiden(adata, key_added="cluster", resolution=r)
+        pred = adata.obs["cluster"].values
+        nmi = normalized_mutual_info_score(y, pred)
+        ari = adjusted_rand_score(y, pred)
+        if nmi > best[0]:
+            best = (nmi, ari, r)
+    return best
 
 
 def subsample_data(adata, fraction, seed):
@@ -41,14 +55,9 @@ def evaluate(adata_dict, config, fraction, seed):
         # Get method config
         method_cfg = config.get_method(method_name)
         embed = method_cfg.embed
-        need_pca = method_cfg.need_pca
 
         # Subsample and prepare
         sub_adata = subsample_data(adata, fraction=fraction, seed=seed)
-
-        # Apply PCA if needed
-        if need_pca:
-            sc.pp.pca(sub_adata)
 
         # Compute neighbors
         sc.pp.neighbors(sub_adata, use_rep=embed)
@@ -71,11 +80,7 @@ def compute_metrics(adata_raw, adata, batch_key, label_key, embed):
 
     # Biological conservation metrics
     asw_cell = scib.me.silhouette(adata, label_key=label_key, embed=embed)
-
-    # Clustering evaluation
-    scib.me.cluster_optimal_resolution(adata, cluster_key="cluster", label_key="celltype")
-    ari = scib.me.ari(adata, cluster_key="cluster", label_key="celltype")
-    nmi = scib.me.nmi(adata, cluster_key="cluster", label_key="celltype")
+    nmi, ari, _best_r = best_leiden_by_nmi(adata, label_key)
 
     # Aggregate scores
     batch_score = (ilisi + graph_connectivity + asw_batch + pcr) / 4
