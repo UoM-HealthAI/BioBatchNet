@@ -131,3 +131,71 @@ def independence_metrics(bio_z: np.ndarray, batch_z: np.ndarray) -> dict:
         'max_abs_corr': max_corr,
         'mean_MI': mean_mi,
     }
+
+
+def aggregate_seeds(run_dir: str, save: bool = True) -> pd.DataFrame:
+    """Aggregate metrics across seeds, compute mean and std.
+
+    Args:
+        run_dir: Path to run directory containing seed_* subdirectories
+        save: Whether to save summary.csv to run_dir
+
+    Returns:
+        DataFrame with mean and std for each metric
+    """
+    import json
+    from pathlib import Path
+
+    run_dir = Path(run_dir)
+    all_metrics = []
+
+    for seed_dir in sorted(run_dir.glob('seed_*')):
+        csv_path = seed_dir / 'metrics.csv'
+        if not csv_path.exists():
+            continue
+
+        df = pd.read_csv(csv_path)
+        if df.empty:
+            continue
+
+        row = df.iloc[-1]  # last row
+        metrics = {}
+
+        # Parse eval metrics
+        if 'eval' in row and pd.notna(row['eval']):
+            eval_dict = json.loads(row['eval'])
+            metrics.update(eval_dict)
+
+        # Parse independence metrics
+        if 'independence' in row and pd.notna(row['independence']):
+            inde_dict = json.loads(row['independence'])
+            metrics.update(inde_dict)
+
+        metrics['seed'] = seed_dir.name
+        all_metrics.append(metrics)
+
+    if not all_metrics:
+        print(f"No metrics found in {run_dir}")
+        return pd.DataFrame()
+
+    df = pd.DataFrame(all_metrics)
+
+    # Compute mean and std for numeric columns
+    numeric_cols = df.select_dtypes(include=[np.number]).columns
+    summary = pd.DataFrame({
+        'mean': df[numeric_cols].mean(),
+        'std': df[numeric_cols].std(),
+    })
+
+    if save:
+        summary_path = run_dir / 'summary.csv'
+        summary.to_csv(summary_path)
+        print(f"Saved summary to {summary_path}")
+
+        # Also print formatted results
+        print(f"\n{'Metric':<15} {'Mean':>10} {'Std':>10}")
+        print("-" * 37)
+        for metric in summary.index:
+            print(f"{metric:<15} {summary.loc[metric, 'mean']:>10.4f} {summary.loc[metric, 'std']:>10.4f}")
+
+    return summary

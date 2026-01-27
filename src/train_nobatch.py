@@ -20,11 +20,15 @@ from .utils.tools import load_adata, evaluate
 SAVE_ROOT = Path(__file__).parent / 'saved'
 
 
-def train(config: Config, seed: int = 42, run_name: str = None, do_eval: bool = True):
-    pl.seed_everything(seed)
+def train(config: Config, seed: int = 42, run_name: str = None, do_eval: bool = True, devices: int = 1):
+    pl.seed_everything(seed, workers=True)
     config.seed = seed
 
-    run_name = run_name or datetime.now().strftime('%Y%m%d_%H%M%S')
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    if run_name is None:
+        run_name = timestamp
+    else:
+        run_name = f"{timestamp}_{run_name}"
     run_dir = SAVE_ROOT / f'{config.preset}_nobatch' / run_name
     save_dir = run_dir / f'seed_{seed}'
 
@@ -73,6 +77,8 @@ def train(config: Config, seed: int = 42, run_name: str = None, do_eval: bool = 
         enable_checkpointing=False,
         enable_progress_bar=True,
         accelerator='auto',
+        devices=devices,
+        deterministic=True,
     )
 
     # Ensure dirs exist for all ranks; only global zero writes configs/metrics.
@@ -133,11 +139,17 @@ def main():
     parser.add_argument('--seed', type=int, default=42, help='Random seed')
     parser.add_argument('--run_name', type=str, default=None, help='Run name (save dir + wandb)')
     parser.add_argument('--no-eval', action='store_true', help='Skip evaluation metrics')
+    parser.add_argument('--devices', type=int, default=1, help='Number of GPUs to use')
     args = parser.parse_args()
 
     config = Config.load(args.config)
-    train(config, args.seed, run_name=args.run_name, do_eval=not args.no_eval)
+    train(config, args.seed, run_name=args.run_name, do_eval=not args.no_eval, devices=args.devices)
 
 
 if __name__ == '__main__':
     main()
+
+
+"""
+python -u -m src.train_nobatch --config macaque --seed 42 --run_name nobatch 
+"""

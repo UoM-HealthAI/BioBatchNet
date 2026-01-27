@@ -1,6 +1,7 @@
 import argparse
 import json
 import csv
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -28,11 +29,21 @@ def set_nested_attr(obj, key: str, value):
     setattr(obj, parts[-1], value)
 
 
-def train(config: Config, seed: int = 42, run_name: Optional[str] = None, do_eval: bool = True):
-    pl.seed_everything(seed)
+def train(config: Config, seed: int = 42, run_name: Optional[str] = None, do_eval: bool = True, devices: int = 1):
+    pl.seed_everything(seed, workers=True)
     config.seed = seed
 
-    run_name = run_name or datetime.now().strftime('%Y%m%d_%H%M%S')
+    timestamp = os.environ.get("BIOBATCHNET_RUN_TS")
+    if not timestamp:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        os.environ["BIOBATCHNET_RUN_TS"] = timestamp
+
+    # Combine timestamp with run_name
+    if run_name is None:
+        run_name = timestamp
+    else:
+        run_name = f"{timestamp}_{run_name}"
+
     run_dir = SAVE_ROOT / config.preset / run_name
     save_dir = run_dir / f'seed_{seed}'
 
@@ -82,6 +93,9 @@ def train(config: Config, seed: int = 42, run_name: Optional[str] = None, do_eva
         enable_checkpointing=False,
         enable_progress_bar=True,
         accelerator='auto',
+        strategy='ddp',
+        devices=devices,
+        deterministic=True,
     )
 
     # In DDP, every rank may hit filesystem writes later; ensure dirs exist everywhere.
@@ -146,6 +160,9 @@ def main():
     parser.add_argument('--seed', type=int, default=42, help='Random seed')
     parser.add_argument('--run_name', type=str, default=None, help='Run name (save dir + wandb)')
     parser.add_argument('--no-eval', action='store_true', help='Skip evaluation metrics')
+    parser.add_argument('--devices', type=int, default=1, help='Number of GPUs to use')
+    parser.add_argument('--batch_size', '--bs', type=int, default=None, help='Batch size per GPU')
+    parser.add_argument('--use_bn', action='store_true', help='Use BatchNorm in ResBlock')
 
     # Config overrides (e.g., --loss.discriminator 0)
     parser.add_argument('--loss.recon', type=float, default=None)
@@ -163,6 +180,9 @@ def main():
     config = Config.load(args.config)
 
     # Apply overrides
+    if args.use_bn:
+        config.model.use_bn = True
+
     overrides = {
         'loss.recon': getattr(args, 'loss.recon'),
         'loss.discriminator': getattr(args, 'loss.discriminator'),
@@ -171,14 +191,14 @@ def main():
         'loss.kl_bio': getattr(args, 'loss.kl_bio'),
         'loss.kl_batch': getattr(args, 'loss.kl_batch'),
         'trainer.epochs': getattr(args, 'trainer.epochs'),
-        'trainer.batch_size': getattr(args, 'trainer.batch_size'),
+        'trainer.batch_size': args.batch_size or getattr(args, 'trainer.batch_size'),
         'trainer.lr': getattr(args, 'trainer.lr'),
     }
     for key, value in overrides.items():
         if value is not None:
             set_nested_attr(config, key, value)
 
-    train(config, args.seed, run_name=args.run_name, do_eval=not args.no_eval)
+    train(config, args.seed, run_name=args.run_name, do_eval=not args.no_eval, devices=args.devices)
 
 
 if __name__ == '__main__':
@@ -186,5 +206,5 @@ if __name__ == '__main__':
 
 
 """
-python -m src.train --config src/config/yaml/base.yaml --seed 42
+python -m src.train --config pancreas --devices 1 --bs 64 --seed 42 
 """

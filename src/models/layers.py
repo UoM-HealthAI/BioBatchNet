@@ -23,11 +23,12 @@ class GRL(nn.Module):
 
 
 class ResBlock(nn.Module):
-    def __init__(self, in_dim, out_dim, dropout=0.1):
+    def __init__(self, in_dim, out_dim, use_bn=False, dropout=0.1):
         super().__init__()
+        self.use_bn = use_bn
         self.block = nn.Sequential(
             nn.Linear(in_dim, out_dim),
-            nn.BatchNorm1d(out_dim),
+            nn.BatchNorm1d(out_dim) if use_bn else nn.Identity(),
             nn.ReLU(),
             nn.Dropout(dropout)
         )
@@ -39,11 +40,11 @@ class ResBlock(nn.Module):
 
 class Encoder(nn.Module):
     """VAE encoder, returns (z, mu, logvar)."""
-    def __init__(self, layer_sizes, dropout=0.1):
+    def __init__(self, layer_sizes, use_bn=False, dropout=0.1):
         super().__init__()
         layers = []
         for i in range(len(layer_sizes) - 1):
-            layers.append(ResBlock(layer_sizes[i], layer_sizes[i + 1], dropout))
+            layers.append(ResBlock(layer_sizes[i], layer_sizes[i + 1], use_bn=use_bn, dropout=dropout))
         self.layers = nn.Sequential(*layers)
 
         latent_dim = layer_sizes[-1]
@@ -64,11 +65,11 @@ class Encoder(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, layer_sizes, dropout=0.1):
+    def __init__(self, layer_sizes, use_bn=False, dropout=0.1):
         super().__init__()
         layers = []
         for i in range(len(layer_sizes) - 1):
-            layers.append(ResBlock(layer_sizes[i], layer_sizes[i + 1], dropout))
+            layers.append(ResBlock(layer_sizes[i], layer_sizes[i + 1], use_bn=use_bn, dropout=dropout))
         self.layers = nn.Sequential(*layers)
 
     def forward(self, z):
@@ -76,11 +77,11 @@ class Decoder(nn.Module):
 
 
 class Classifier(nn.Module):
-    def __init__(self, layer_sizes, dropout=0.1):
+    def __init__(self, layer_sizes, use_bn=False, dropout=0.1):
         super().__init__()
         layers = []
         for i in range(len(layer_sizes) - 1):
-            layers.append(ResBlock(layer_sizes[i], layer_sizes[i + 1], dropout))
+            layers.append(ResBlock(layer_sizes[i], layer_sizes[i + 1], use_bn=use_bn, dropout=dropout))
         self.layers = nn.Sequential(*layers)
 
     def forward(self, x):

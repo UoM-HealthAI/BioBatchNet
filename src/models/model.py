@@ -52,11 +52,11 @@ class IMCBioBatchNet(nn.Module):
         bio_clf_sizes = [config.latent_sz] + config.bio_classifier_layers + [num_batch]
         batch_clf_sizes = [config.latent_sz] + config.batch_classifier_layers + [num_batch]
 
-        self.bio_encoder = Encoder(bio_enc_sizes, dropout=config.dropout)
-        self.batch_encoder = Encoder(batch_enc_sizes, dropout=config.dropout)
-        self.decoder = Decoder(dec_sizes, dropout=config.dropout)
-        self.bio_classifier = Classifier(bio_clf_sizes, dropout=config.dropout)
-        self.batch_classifier = Classifier(batch_clf_sizes, dropout=config.dropout)
+        self.bio_encoder = Encoder(bio_enc_sizes, use_bn=config.use_bn, dropout=config.dropout)
+        self.batch_encoder = Encoder(batch_enc_sizes, use_bn=config.use_bn, dropout=config.dropout)
+        self.decoder = Decoder(dec_sizes, use_bn=config.use_bn, dropout=config.dropout)
+        self.bio_classifier = Classifier(bio_clf_sizes, use_bn=config.use_bn, dropout=config.dropout)
+        self.batch_classifier = Classifier(batch_clf_sizes, use_bn=config.use_bn, dropout=config.dropout)
 
         self.grl = GRL(alpha=1.0)
 
@@ -118,18 +118,18 @@ class SeqBioBatchNet(nn.Module):
         bio_clf_sizes = [config.latent_sz] + config.bio_classifier_layers + [num_batch]
         batch_clf_sizes = [config.latent_sz] + config.batch_classifier_layers + [num_batch]
 
-        self.bio_encoder = Encoder(bio_enc_sizes, dropout=config.dropout)
-        self.batch_encoder = Encoder(batch_enc_sizes, dropout=config.dropout)
-        self.size_encoder = Encoder(size_enc_sizes, dropout=config.dropout)
-        self.decoder = Decoder(dec_sizes, dropout=config.dropout)
+        self.bio_encoder = Encoder(bio_enc_sizes, use_bn=config.use_bn, dropout=config.dropout)
+        self.batch_encoder = Encoder(batch_enc_sizes, use_bn=config.use_bn, dropout=config.dropout)
+        self.size_encoder = Encoder(size_enc_sizes, use_bn=config.use_bn, dropout=config.dropout)
+        self.decoder = Decoder(dec_sizes, use_bn=config.use_bn, dropout=config.dropout)
 
         # ZINB output layers
         self.mean_decoder = nn.Sequential(nn.Linear(1000, out_sz), MeanAct())
         self.disp_decoder = nn.Sequential(nn.Linear(1000, out_sz), DispAct())
         self.dropout_decoder = nn.Sequential(nn.Linear(1000, out_sz), nn.Sigmoid())
 
-        self.bio_classifier = Classifier(bio_clf_sizes, dropout=config.dropout)
-        self.batch_classifier = Classifier(batch_clf_sizes, dropout=config.dropout)
+        self.bio_classifier = Classifier(bio_clf_sizes, use_bn=config.use_bn, dropout=config.dropout)
+        self.batch_classifier = Classifier(batch_clf_sizes, use_bn=config.use_bn, dropout=config.dropout)
 
         self.grl = GRL(alpha=1.0)
 
@@ -227,9 +227,9 @@ class NOBatch(nn.Module):
         dec_sizes = [config.latent_sz] + config.decoder_layers + [out_sz]
         bio_clf_sizes = [config.latent_sz] + config.bio_classifier_layers + [num_batch]
 
-        self.bio_encoder = Encoder(bio_enc_sizes, dropout=config.dropout)
-        self.decoder = Decoder(dec_sizes, dropout=config.dropout)
-        self.bio_classifier = Classifier(bio_clf_sizes, dropout=config.dropout)
+        self.bio_encoder = Encoder(bio_enc_sizes, use_bn=config.use_bn, dropout=config.dropout)
+        self.decoder = Decoder(dec_sizes, use_bn=config.use_bn, dropout=config.dropout)
+        self.bio_classifier = Classifier(bio_clf_sizes, use_bn=config.use_bn, dropout=config.dropout)
 
         self.grl = GRL(alpha=1.0)
 

@@ -28,7 +28,7 @@ immuncan:
   mode: imc
   data: /home/w29632hl/code/BatchEffect/BioBatchNet/DATA/IMC/IMMUcan_batch.h5ad
   trainer:
-    epochs: 50
+    epochs: 30
   loss:
     recon: 10
     discriminator: 0.3

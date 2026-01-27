@@ -1,12 +1,9 @@
-name: experiment
 mode: imc
 seed: 42
 
 model:
-  in_sz: 2000
-  out_sz: 2000
   latent_sz: 20
-  num_batch: 1
+  use_bn: false
   bio_encoder_layers: [512, 2048, 2048]
   batch_encoder_layers: [512]
   decoder_layers: [2048, 2048, 512]
@@ -26,8 +23,8 @@ loss:
 trainer:
   epochs: 100
   batch_size: 128
-  lr: 3e-4
-  weight_decay: 0.01
+  lr: 1.0e-4
+  weight_decay: 1.0e-5
   scheduler_step: 50
   scheduler_gamma: 0.1
   early_stop: 5

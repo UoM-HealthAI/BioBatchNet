@@ -19,6 +19,7 @@ class ModelConfig:
     """Model architecture configuration."""
     latent_sz: int = 20
     dropout: float = 0.1
+    use_bn: bool = False
 
     bio_encoder_layers: List[int] = field(default_factory=lambda: [512, 2048, 2048])
     batch_encoder_layers: List[int] = field(default_factory=lambda: [512])
@@ -52,7 +53,7 @@ class TrainerConfig:
     scheduler_gamma: float = 0.1
 
     # Early stopping
-    early_stop: int = 15
+    early_stop: int = 5
 
     # Logging
     save_dir: str = "./saved/"
@@ -111,8 +112,16 @@ class Config:
 
     @classmethod
     def _load_preset_dict(cls, dataset: str) -> dict:
-        """Load preset as dictionary."""
-        presets_path = Path(__file__).parent / 'yaml' / 'presets.yaml'
+        """Load preset as dictionary, inheriting from base.yaml."""
+        yaml_dir = Path(__file__).parent / 'yaml'
+
+        # Load base.yaml first
+        base_path = yaml_dir / 'base.yaml'
+        with open(base_path, 'r') as f:
+            base_dict = yaml.safe_load(f)
+
+        # Load presets.yaml
+        presets_path = yaml_dir / 'presets.yaml'
         with open(presets_path, 'r') as f:
             presets = yaml.safe_load(f)
 
@@ -120,7 +129,7 @@ class Config:
             raise ValueError(f"Dataset '{dataset}' not found. Available: {list(presets.keys())}")
 
         preset = presets[dataset]
-        return {
+        preset_dict = {
             'mode': preset['mode'],
             'preset': dataset,
             'data': {'path': preset.get('data')},
@@ -128,6 +137,9 @@ class Config:
             'loss': preset.get('loss', {}),
             'trainer': preset.get('trainer', {}),
         }
+
+        # Merge: base <- preset (preset overrides base)
+        return _deep_merge(base_dict, preset_dict)
 
     @classmethod
     def _from_dict(cls, d: dict) -> 'Config':
