@@ -39,7 +39,7 @@ immuncan:
 
 pancreas:
   mode: seq
-  data: Data/scRNA-seq/pancreas.h5ad
+  data: /home/w29632hl/code/BatchEffect/BioBatchNet/DATA/scRNA/pancreas.h5ad
   loss:
     recon: 10
     discriminator: 0.04
@@ -51,7 +51,7 @@ pancreas:
 
 macaque:
   mode: seq
-  data: Data/scRNA-seq/macaque.h5ad
+  data: /home/w29632hl/code/BatchEffect/BioBatchNet/DATA/scRNA/macaque.h5ad
   loss:
     recon: 3
     discriminator: 0.02
@@ -63,7 +63,7 @@ macaque:
 
 mousebrain:
   mode: seq
-  data: Data/scRNA-seq/mousebrain.h5ad
+  data:  /home/w29632hl/code/BatchEffect/BioBatchNet/DATA/scRNA/mousebrain.h5ad
   loss:
     recon: 2
     discriminator: 0.3

@@ -26,7 +26,7 @@ def save_adata_dict(adata_dict, save_dir, dataset_name):
     dataset_save_dir = os.path.join(save_dir, dataset_name)
     if not os.path.exists(dataset_save_dir):
         os.makedirs(dataset_save_dir)
-    
+
     for key, adata in adata_dict.items():
         save_path = os.path.join(dataset_save_dir, f"{key}.h5ad")
         adata.write_h5ad(save_path)

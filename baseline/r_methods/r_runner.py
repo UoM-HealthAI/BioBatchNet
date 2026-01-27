@@ -55,13 +55,6 @@ class RBackend:
             td = Path(td)
             in_path = td / "in.h5ad"
             out_path = td / "out.tsv"
-            
-            # Clean adata to avoid _index column issue when writing h5ad
-            adata.raw = None
-            if "_index" in adata.var.columns:
-                adata.var = adata.var.drop(columns=["_index"])
-            if "_index" in adata.obs.columns:
-                adata.obs = adata.obs.drop(columns=["_index"])
             adata.write_h5ad(in_path)
 
             self._run_rscript(script_name, in_path, out_path, extra_args=extra_args)

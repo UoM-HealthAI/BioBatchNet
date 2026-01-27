@@ -183,3 +183,8 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+
+"""
+python -m src.train --config src/config/yaml/base.yaml --seed 42
+"""

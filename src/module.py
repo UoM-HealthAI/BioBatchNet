@@ -66,7 +66,6 @@ class BaseBBNModule(pl.LightningModule):
         return bio_z, batch_z
 
     def on_train_epoch_end(self):
-        # Only save on rank 0 to avoid duplicate saves in multi-GPU training
         if self.trainer.global_rank != 0:
             return
         epoch = self.current_epoch + 1
