@@ -6,7 +6,7 @@ import pytorch_lightning as pl
 
 from .models.model import IMCBioBatchNet, SeqBioBatchNet, NOBatch
 from .utils.loss import kl_divergence, orthogonal_loss, ZINBLoss
-from .utils.tools import visualization
+from .utils.tools import visualization, independence_eval
 from .config import Config
 
 
@@ -65,18 +65,36 @@ class BaseBBNModule(pl.LightningModule):
         batch_z = np.concatenate(batch_z_list, axis=0) if batch_z_list else None
         return bio_z, batch_z
 
+    def _run_independence_eval(self):
+        """Run independence evaluation and log to wandb."""
+        dataset = self.trainer.train_dataloader.dataset
+        loader = torch.utils.data.DataLoader(dataset, batch_size=128, shuffle=False)
+        bio_z, batch_z = self.get_embeddings(loader)
+        if bio_z is not None and batch_z is not None:
+            batch_labels = dataset.batch_labels.numpy()
+            cell_labels = dataset.cell_types.numpy() if dataset.cell_types is not None else None
+            inde = independence_eval(bio_z, batch_z, batch_labels, cell_labels, seed=self.config.trainer.eval_seed)
+            for k, v in inde.items():
+                self.log(f'inde/{k}', v, on_step=False, on_epoch=True, sync_dist=True)
+
     def on_train_epoch_end(self):
         if self.trainer.global_rank != 0:
             return
         epoch = self.current_epoch + 1
+        dataset = self.trainer.train_dataloader.dataset
+
+        # UMAP visualization
         if self.save_dir and epoch % self.config.trainer.save_period == 0:
-            dataset = self.trainer.train_dataloader.dataset
-            if dataset.cell_types is None:
-                return
-            loader = torch.utils.data.DataLoader(dataset, batch_size=128, shuffle=False)
-            bio_z, _ = self.get_embeddings(loader)
-            save_path = self.save_dir / f'umap_epoch{epoch}.png'
-            visualization(bio_z, dataset.batch_labels.numpy(), dataset.cell_types.numpy(), save_path)
+            if dataset.cell_types is not None:
+                loader = torch.utils.data.DataLoader(dataset, batch_size=128, shuffle=False)
+                bio_z, _ = self.get_embeddings(loader)
+                save_path = self.save_dir / f'umap_epoch{epoch}.png'
+                visualization(bio_z, dataset.batch_labels.numpy(), dataset.cell_types.numpy(), save_path)
+
+        # Independence evaluation (epoch 0, 5, 10, ...)
+        inde_eval_period = self.config.trainer.inde_eval_period
+        if inde_eval_period > 0 and self.current_epoch % inde_eval_period == 0:
+            self._run_independence_eval()
 
 
 class IMCModule(BaseBBNModule):

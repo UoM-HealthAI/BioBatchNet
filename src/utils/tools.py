@@ -6,7 +6,10 @@ import pandas as pd
 from scipy.sparse import issparse
 from scipy.stats import pearsonr
 from sklearn.feature_selection import mutual_info_regression
-from sklearn.metrics import adjusted_rand_score, normalized_mutual_info_score
+from sklearn.linear_model import LogisticRegression, Ridge
+from sklearn.model_selection import cross_val_predict, StratifiedKFold, KFold
+from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.metrics import adjusted_rand_score, normalized_mutual_info_score, balanced_accuracy_score, r2_score
 import anndata as ad
 
 
@@ -131,6 +134,67 @@ def independence_metrics(bio_z: np.ndarray, batch_z: np.ndarray) -> dict:
         'max_abs_corr': max_corr,
         'mean_MI': mean_mi,
     }
+
+
+def _probe_balacc(z, labels, n_splits=5, seed=42):
+    """Linear probe: z -> labels. Returns balanced accuracy and chance level."""
+    le = LabelEncoder()
+    y = le.fit_transform(labels)
+    n_classes = len(le.classes_)
+    X = StandardScaler().fit_transform(z)
+    cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)
+    clf = LogisticRegression(max_iter=1000, random_state=seed, class_weight='balanced')
+    pred = cross_val_predict(clf, X, y, cv=cv)
+    balacc = float(balanced_accuracy_score(y, pred))
+    chance = float(1.0 / n_classes) if n_classes > 0 else 0.0
+    return balacc, chance
+
+
+def _latent_r2(src, tgt, n_splits=5, seed=42):
+    """CV R² (Ridge): src -> tgt, averaged over target dimensions."""
+    X = StandardScaler().fit_transform(src)
+    Y = StandardScaler().fit_transform(tgt)
+    cv = KFold(n_splits=n_splits, shuffle=True, random_state=seed)
+    ridge = Ridge(alpha=1.0, random_state=seed)
+    r2s = []
+    for j in range(Y.shape[1]):
+        r2s.append(r2_score(Y[:, j], cross_val_predict(ridge, X, Y[:, j], cv=cv)))
+    return float(np.mean(r2s))
+
+
+def independence_eval(bio_z, batch_z, batch_labels, cell_labels=None, n_splits=5, seed=42):
+    """Independence evaluation between bio and batch latent spaces.
+
+    Returns dict with probe balanced-accuracy scores and cross-validated R²
+    measuring leakage between the two latent spaces.
+    """
+    results = {}
+
+    # Probes: predict batch from bio (should be near chance) and from batch (sanity)
+    balacc, chance = _probe_balacc(bio_z, batch_labels, n_splits, seed)
+    results['batch_from_bio_balacc'] = balacc
+    results['batch_from_bio_chance'] = chance
+    results['batch_from_bio_gap'] = balacc - chance
+
+    balacc, chance = _probe_balacc(batch_z, batch_labels, n_splits, seed)
+    results['batch_from_batch_balacc'] = balacc
+    results['batch_from_batch_chance'] = chance
+    results['batch_from_batch_gap'] = balacc - chance
+
+    if cell_labels is not None:
+        balacc, chance = _probe_balacc(bio_z, cell_labels, n_splits, seed)
+        results['celltype_from_bio_balacc'] = balacc
+        results['celltype_from_bio_gap'] = balacc - chance
+
+        balacc, chance = _probe_balacc(batch_z, cell_labels, n_splits, seed)
+        results['celltype_from_batch_balacc'] = balacc
+        results['celltype_from_batch_gap'] = balacc - chance
+
+    # CV R²: batch <-> bio
+    results['r2_batch_to_bio'] = _latent_r2(batch_z, bio_z, n_splits, seed)
+    results['r2_bio_to_batch'] = _latent_r2(bio_z, batch_z, n_splits, seed)
+
+    return results
 
 
 def aggregate_seeds(run_dir: str, save: bool = True) -> pd.DataFrame:

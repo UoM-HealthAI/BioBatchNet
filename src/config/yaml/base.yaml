@@ -33,3 +33,4 @@ trainer:
   verbosity: 2
   sampling_fraction: 1.0
   eval_seed: 42
+  inde_eval_period: 3

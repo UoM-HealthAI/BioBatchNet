@@ -63,6 +63,7 @@ class TrainerConfig:
     # Evaluation
     sampling_fraction: float = 1.0
     eval_seed: int = 42
+    inde_eval_period: int = 1  # independence eval every N epochs (0 to disable)
 
 
 @dataclass
