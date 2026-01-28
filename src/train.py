@@ -115,6 +115,8 @@ def train(config: Config, seed: int = 42, run_name: Optional[str] = None, do_eva
         eval_loader = torch.utils.data.DataLoader(dataset, batch_size=config.trainer.batch_size, shuffle=False)
         z_bio, z_batch = model.get_embeddings(eval_loader)
         adata.obsm['X_biobatchnet'] = z_bio
+        adata.obsm['X_batch'] = z_batch
+        adata.write(save_dir / 'adata.h5ad')
 
         if do_eval:
             eval_metrics = evaluate(
@@ -127,19 +129,14 @@ def train(config: Config, seed: int = 42, run_name: Optional[str] = None, do_eva
             for k, v in eval_metrics.items():
                 print(f"{k}: {v:.4f}")
 
-            inde_metrics = independence_metrics(z_bio, z_batch)
-            for k, v in inde_metrics.items():
-                print(f"{k}: {v:.4f}")
-
         # Cast numpy/torch scalars to Python floats for serialization
         eval_metrics = {k: float(v) for k, v in eval_metrics.items()}
-        inde_metrics = {k: float(v) for k, v in inde_metrics.items()}
 
         # Also save a simple CSV row where metrics dicts are stored as strings
         csv_path = save_dir / 'metrics.csv'
         write_header = not csv_path.exists()
         with open(csv_path, 'a', newline='') as f:
-            w = csv.DictWriter(f, fieldnames=['preset', 'run_name', 'seed', 'eval', 'independence'])
+            w = csv.DictWriter(f, fieldnames=['preset', 'run_name', 'seed', 'eval'])
             if write_header:
                 w.writeheader()
             w.writerow({
@@ -147,7 +144,6 @@ def train(config: Config, seed: int = 42, run_name: Optional[str] = None, do_eva
                 'run_name': run_name,
                 'seed': seed,
                 'eval': json.dumps(eval_metrics),
-                'independence': json.dumps(inde_metrics),
             })
 
 
@@ -206,5 +202,5 @@ if __name__ == '__main__':
 
 
 """
-python -m src.train --config pancreas --devices 1 --bs 64 --seed 42 
+python -m src.train --config immuncan --devices 1 --bs 128 --seed 42 --no-eval
 """

@@ -2,6 +2,7 @@
 import argparse
 import json
 import csv
+import os
 from datetime import datetime
 from pathlib import Path
 
@@ -24,7 +25,11 @@ def train(config: Config, seed: int = 42, run_name: str = None, do_eval: bool = 
     pl.seed_everything(seed, workers=True)
     config.seed = seed
 
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    timestamp = os.environ.get("BIOBATCHNET_RUN_TS")
+    if not timestamp:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        os.environ["BIOBATCHNET_RUN_TS"] = timestamp
+
     if run_name is None:
         run_name = timestamp
     else:
@@ -77,6 +82,7 @@ def train(config: Config, seed: int = 42, run_name: str = None, do_eval: bool = 
         enable_checkpointing=False,
         enable_progress_bar=True,
         accelerator='auto',
+        strategy='auto',
         devices=devices,
         deterministic=True,
     )

@@ -66,11 +66,11 @@ if __name__ == "__main__":
 
 """
 # Sequential
-python run.py --dataset pancreas --methods CombatSeq
+python run.py --dataset SubMouseBrain --methods SeuratCCA,SeuratRPCA,FastMNN
 
 # Parallel (3 jobs)
-python run.py --dataset pancreas --methods CombatSeq,FastMNN,SeuratRPCA --n_jobs 3
+python run.py --dataset macaque --methods FastMNN,SeuratRPCA --n_jobs 3
 
 # Parallel (all CPUs)
-python run.py --dataset pancreas --n_jobs -1
+python run.py --dataset macaque --n_jobs -1
 """
