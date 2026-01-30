@@ -1,5 +1,6 @@
 import os
 import scanpy as sc
+import pandas as pd
 from tqdm import tqdm
 import logging
 from datetime import datetime
@@ -69,6 +70,16 @@ def sampling(adata_dict, fraction=0.3):
     return sampling_adata_dict
 
 
+def save_one_adata(adata, method_name, save_dir):
+    """Save single adata result to h5ad file."""
+    adata_dir = os.path.join(save_dir, 'adata_results')
+    os.makedirs(adata_dir, exist_ok=True)
+    save_path = os.path.join(adata_dir, f'{method_name}.h5ad')
+    adata.write(save_path)
+    logger.info(f"Saved {method_name} to {save_path}")
+    return save_path
+
+
 def save_all_adata(adata_dict, save_dir):
     """Save all adata results to h5ad files."""
     adata_dir = os.path.join(save_dir, 'adata_results')
@@ -97,6 +108,27 @@ def load_all_adata(save_dir):
             logger.info(f"Loaded {method}")
 
     return adata_dict
+
+
+def append_method_result(save_dir, method_name, method_metrics, timing_row=None):
+    """Append one method's evaluation result (and timing) to CSV. Safer: one method at a time."""
+    metrics = sorted(method_metrics.keys())
+    row = {'method': method_name}
+    for m in metrics:
+        row[f'{m}_mean'] = method_metrics[m]['mean']
+        row[f'{m}_std'] = method_metrics[m]['std']
+    # Add timing to the same row
+    if timing_row is not None:
+        row['time_mean'] = timing_row['mean']
+        row['time_std'] = timing_row['std']
+
+    results_path = os.path.join(save_dir, 'results.csv')
+    df = pd.DataFrame([row])
+    if os.path.exists(results_path):
+        df.to_csv(results_path, mode='a', header=False, index=False)
+    else:
+        df.to_csv(results_path, index=False)
+    logger.info(f"Results appended for {method_name} -> {results_path}")
 
 
 def get_save_dir(dataset_config, dataset_name):

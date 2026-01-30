@@ -6,6 +6,7 @@ import yaml
 @dataclass
 class MethodConfig:
     embed: str
+    stochastic: bool = False  # True for neural network methods requiring multi-seed evaluation
 
 
 @dataclass
@@ -30,7 +31,10 @@ class BaselineConfig:
 
         methods = {}
         for name, cfg in data.get('methods', {}).items():
-            methods[name] = MethodConfig(embed=cfg['embed'])
+            methods[name] = MethodConfig(
+                embed=cfg['embed'],
+                stochastic=cfg.get('stochastic', False)
+            )
 
         datasets = {}
         for name, cfg in data.get('datasets', {}).items():

@@ -85,16 +85,16 @@ class BaseBBNModule(pl.LightningModule):
 
         # UMAP visualization
         if self.save_dir and epoch % self.config.trainer.save_period == 0:
-            if dataset.cell_types is not None:
+            if dataset.cell_type_names is not None:
                 loader = torch.utils.data.DataLoader(dataset, batch_size=128, shuffle=False)
                 bio_z, _ = self.get_embeddings(loader)
                 save_path = self.save_dir / f'umap_epoch{epoch}.png'
-                visualization(bio_z, dataset.batch_labels.numpy(), dataset.cell_types.numpy(), save_path)
+                visualization(bio_z, dataset.batch_names, dataset.cell_type_names, save_path)
 
-        # Independence evaluation (epoch 0, 5, 10, ...)
-        inde_eval_period = self.config.trainer.inde_eval_period
-        if inde_eval_period > 0 and self.current_epoch % inde_eval_period == 0:
-            self._run_independence_eval()
+        # # Independence evaluation (epoch 0, 5, 10, ...)
+        # inde_eval_period = self.config.trainer.inde_eval_period
+        # if inde_eval_period > 0 and self.current_epoch % inde_eval_period == 0:
+        #     self._run_independence_eval()
 
 
 class IMCModule(BaseBBNModule):

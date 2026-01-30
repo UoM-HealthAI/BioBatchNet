@@ -9,13 +9,13 @@ import torch
 import gc
 import time
 
-from utils import logger
+from utils import logger, save_one_adata, append_method_result
 from evaluation import evaluate
 from r_methods import RBackend
 
 
 class RunBaseline:
-    def __init__(self, adata, config, dataset_config):
+    def __init__(self, adata, config, dataset_config, save_dir=None):
         """
         Run baseline methods for batch effect correction.
 
@@ -23,6 +23,7 @@ class RunBaseline:
             adata: AnnData object
             config: BaselineConfig object
             dataset_config: DatasetConfig for the current dataset
+            save_dir: Directory to save adata results (optional)
         """
         self.adata = adata.copy()
         self.config = config
@@ -31,6 +32,7 @@ class RunBaseline:
         self.sampling_fraction = dataset_config.sampling_fraction
         self.sampling_seed = dataset_config.sampling_seed
         self.timing_results = {}
+        self.save_dir = save_dir
 
         self.r_backend = RBackend(
             scripts_dir=".",
@@ -84,8 +86,8 @@ class RunBaseline:
             result = self._run_scanorama(adata_base.copy())
         elif method_name == 'Combat':
             result = self._run_combat(adata_base.copy())
-        elif method_name == 'CombatSeq':
-            result = self.r_backend.combatseq(adata_base.copy())
+        # elif method_name == 'CombatSeq':
+        #     result = self.r_backend.combatseq(adata_base.copy())
         elif method_name == "SeuratCCA":
             result = self.r_backend.seurat(adata_base.copy(), method="cca")
         elif method_name == "SeuratRPCA":
@@ -135,62 +137,104 @@ class RunBaseline:
 
     def run_all_seeds_and_evaluate(self):
         """
-        Run all methods with multiple seeds and evaluate.
-        Only keeps first seed's adata for visualization, discards others to save memory.
-        
+        Run all methods and evaluate.
+        - Stochastic methods (neural networks): run multiple seeds, aggregate mean/std
+        - Deterministic methods: run once, return results directly
+
         Returns:
-            Tuple of (final_results, timing_stats, first_adata_dict)
+            Tuple of (final_results, timing_stats, all_adata)
         """
-        first_adata = None
-        aggregated = {}
-        timing_aggregated = {m: [] for m in self.config.methods.keys()}
-
-        for i, seed in enumerate(self.seed_list):
-            logger.info(f"Running with seed={seed} ({i+1}/{len(self.seed_list)})")
-
-            adata_dict, timing = self.run_one_seed(seed)
-
-            # Only keep first seed's adata for visualization
-            if i == 0:
-                first_adata = adata_dict
-
-            # Collect timing
-            for method, elapsed in timing.items():
-                timing_aggregated[method].append(elapsed)
-
-            # Evaluate immediately (don't keep adata for other seeds)
-            metrics = evaluate(
-                adata_dict, self.config,
-                fraction=self.sampling_fraction,
-                seed=self.sampling_seed
-            )
-
-            # Aggregate metrics
-            for method, method_metrics in metrics.items():
-                if method not in aggregated:
-                    aggregated[method] = {m: [] for m in method_metrics}
-                for metric, value in method_metrics.items():
-                    aggregated[method][metric].append(value)
-
-        # Calculate final statistics
+        all_adata = {"Raw": self.adata.copy()}
         final_results = {}
-        for method, metric_dict in aggregated.items():
-            final_results[method] = {
-                metric: {'mean': np.mean(values), 'std': np.std(values)}
-                for metric, values in metric_dict.items()
-            }
-
-        # Calculate timing stats
         timing_stats = {}
-        for method, times in timing_aggregated.items():
-            timing_stats[method] = {
-                'mean': np.mean(times),
-                'std': np.std(times),
-                'times': times
-            }
-            logger.info(f"{method} timing - mean: {np.mean(times):.2f}s, std: {np.std(times):.2f}s")
 
-        return final_results, timing_stats, first_adata
+        # Separate stochastic and deterministic methods
+        stochastic_methods = []
+        deterministic_methods = []
+        for method_name, method_cfg in self.config.methods.items():
+            if method_cfg.stochastic:
+                stochastic_methods.append(method_name)
+            else:
+                deterministic_methods.append(method_name)
+
+        # 1. Run deterministic methods (single run, evaluate immediately)
+        if deterministic_methods:
+            logger.info(f"Running deterministic methods: {deterministic_methods}")
+            seed = self.seed_list[0]
+            self._set_seed(seed)
+            adata_base = self.adata.copy()
+
+            for method_name in deterministic_methods:
+                adata, elapsed = self._run_method(method_name, adata_base, seed)
+                all_adata[method_name] = adata
+                timing_stats[method_name] = {'mean': elapsed, 'std': 0.0, 'times': [elapsed]}
+
+                # Evaluate and save immediately
+                metrics = evaluate(
+                    {"Raw": adata_base, method_name: adata}, self.config,
+                    fraction=self.sampling_fraction, seed=self.sampling_seed
+                )
+                final_results[method_name] = {
+                    metric: {'mean': value, 'std': 0.0}
+                    for metric, value in metrics[method_name].items()
+                }
+                if self.save_dir:
+                    save_one_adata(adata, method_name, self.save_dir)
+                    append_method_result(
+                        self.save_dir, method_name, final_results[method_name],
+                        timing_stats[method_name]
+                    )
+
+        # 2. Run stochastic methods (multiple seeds, aggregate by method)
+        if stochastic_methods:
+            logger.info(f"Running stochastic methods: {stochastic_methods}")
+            adata_base = self.adata.copy()
+
+            for method_name in stochastic_methods:
+                logger.info(f"Running {method_name} with {len(self.seed_list)} seeds")
+                metrics_list = []
+                times_list = []
+
+                for i, seed in enumerate(self.seed_list):
+                    logger.info(f"{method_name} seed={seed} ({i+1}/{len(self.seed_list)})")
+                    self._set_seed(seed)
+                    adata, elapsed = self._run_method(method_name, adata_base.copy(), seed)
+                    times_list.append(elapsed)
+
+                    # Evaluate this seed
+                    metrics = evaluate(
+                        {"Raw": adata_base, method_name: adata}, self.config,
+                        fraction=self.sampling_fraction, seed=self.sampling_seed
+                    )
+                    metrics_list.append(metrics[method_name])
+
+                    # Keep first seed's adata for visualization
+                    if i == 0:
+                        all_adata[method_name] = adata
+
+                    gc.collect()
+
+                # Calculate mean/std and save immediately
+                final_results[method_name] = {
+                    metric: {'mean': np.mean([m[metric] for m in metrics_list]),
+                             'std': np.std([m[metric] for m in metrics_list])}
+                    for metric in metrics_list[0].keys()
+                }
+                timing_stats[method_name] = {
+                    'mean': np.mean(times_list),
+                    'std': np.std(times_list),
+                    'times': times_list
+                }
+                logger.info(f"{method_name} timing - mean: {np.mean(times_list):.2f}s, std: {np.std(times_list):.2f}s")
+
+                if self.save_dir:
+                    save_one_adata(all_adata[method_name], method_name, self.save_dir)
+                    append_method_result(
+                        self.save_dir, method_name, final_results[method_name],
+                        timing_stats[method_name]
+                    )
+
+        return final_results, timing_stats, all_adata
 
     def _run_scvi(self, adata):
         import scvi
@@ -198,18 +242,18 @@ class RunBaseline:
         sc.pp.highly_variable_genes(adata, n_top_genes=2000, flavor="seurat_v3", subset=True, layer="counts")
         scvi.model.SCVI.setup_anndata(adata, batch_key="BATCH", layer="counts")
         model = scvi.model.SCVI(adata, gene_likelihood=("normal" if self.mode=="imc" else "zinb"))
-        model.train(max_epochs=100)
+        model.train(max_epochs=400)
         adata.obsm["X_scvi"] = model.get_latent_representation()
         return adata
     
     def _run_mrvi(self, adata):
-        import scvi
+        from scvi.external import MRVI
         adata = self._ensure_counts_layer(adata)
         sc.pp.highly_variable_genes(adata, n_top_genes=2000, flavor="seurat_v3",
                                     subset=True, layer="counts")
-        scvi.external.MRVI.setup_anndata(adata, sample_key="BATCH", layer="counts")
-        model = scvi.external.MRVI(adata, gene_likelihood=("normal" if self.mode=="imc" else "zinb"))
-        model.train(max_epochs=100)
+        MRVI.setup_anndata(adata, sample_key="BATCH", backend="torch")
+        model = MRVI(adata)
+        model.train(max_epochs=400)
         adata.obsm["X_mrvi"] = model.get_latent_representation()
         return adata
 
@@ -226,10 +270,11 @@ class RunBaseline:
         return result
 
     def _run_harmony(self, adata):
+        import harmonypy as hm
         adata = self._seq_process(adata)
         sc.pp.pca(adata)
-        sc.external.pp.harmony_integrate(adata, 'BATCH')
-        adata.obsm["X_harmony"] = adata.obsm["X_pca_harmony"]
+        ho = hm.run_harmony(adata.obsm['X_pca'], adata.obs, 'BATCH')
+        adata.obsm["X_harmony"] = ho.Z_corr
         return adata
 
     def _run_bbknn(self, adata):

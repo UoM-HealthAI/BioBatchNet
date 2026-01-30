@@ -16,7 +16,7 @@ from pytorch_lightning.loggers import WandbLogger
 from .config import Config
 from .module import IMCModule, SeqModule
 from .utils.dataset import BBNDataset
-from .utils.tools import load_adata, evaluate, independence_metrics
+from .utils.tools import load_adata, evaluate, independence_metrics, visualization_with_leiden
 
 SAVE_ROOT = Path(__file__).parent / 'saved'
 
@@ -54,7 +54,7 @@ def train(config: Config, seed: int = 42, run_name: Optional[str] = None, do_eva
     adata = sc.read_h5ad(str(data_path))
     adata_raw = adata.copy()
 
-    data, batch_labels, cell_types = load_adata(
+    data, batch_labels, cell_types, batch_names, cell_type_names = load_adata(
         str(data_path),
         data_type=config.mode,
         preprocess=preprocess,
@@ -65,7 +65,7 @@ def train(config: Config, seed: int = 42, run_name: Optional[str] = None, do_eva
     in_sz = data.shape[1]
     num_batch = len(np.unique(batch_labels))
 
-    dataset = BBNDataset(data, batch_labels, cell_types)
+    dataset = BBNDataset(data, batch_labels, cell_types, batch_names, cell_type_names)
     dataloader = torch.utils.data.DataLoader(
         dataset,
         batch_size=config.trainer.batch_size,
@@ -93,9 +93,11 @@ def train(config: Config, seed: int = 42, run_name: Optional[str] = None, do_eva
         enable_checkpointing=False,
         enable_progress_bar=True,
         accelerator='auto',
-        strategy='ddp',
+        strategy='ddp' if devices > 1 else 'auto',
         devices=devices,
         deterministic=True,
+        gradient_clip_val=1.0,
+        gradient_clip_algorithm='norm',
     )
 
     # In DDP, every rank may hit filesystem writes later; ensure dirs exist everywhere.
@@ -116,7 +118,6 @@ def train(config: Config, seed: int = 42, run_name: Optional[str] = None, do_eva
         z_bio, z_batch = model.get_embeddings(eval_loader)
         adata.obsm['X_biobatchnet'] = z_bio
         adata.obsm['X_batch'] = z_batch
-        adata.write(save_dir / 'adata.h5ad')
 
         if do_eval:
             eval_metrics = evaluate(
@@ -128,6 +129,18 @@ def train(config: Config, seed: int = 42, run_name: Optional[str] = None, do_eva
             )
             for k, v in eval_metrics.items():
                 print(f"{k}: {v:.4f}")
+
+            # Visualization with leiden clustering (also adds leiden to adata.obs)
+            visualization_with_leiden(
+                adata,
+                save_path=save_dir / 'umap.png',
+                batch_key=config.data.batch_key,
+                label_key=config.data.cell_type_key,
+                seed=seed,
+            )
+
+        # Save adata after visualization so it includes leiden results
+        adata.write(save_dir / 'adata.h5ad')
 
         # Cast numpy/torch scalars to Python floats for serialization
         eval_metrics = {k: float(v) for k, v in eval_metrics.items()}
@@ -202,5 +215,5 @@ if __name__ == '__main__':
 
 
 """
-python -m src.train --config immuncan --devices 1 --bs 128 --seed 42 --no-eval
+python -m src.train --config immucan --devices 1 --loss.discriminator 0.05 --bs 128 --seed 42
 """

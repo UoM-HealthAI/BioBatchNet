@@ -1,6 +1,7 @@
 import scanpy as sc
 import scib
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 import numpy as np
 import pandas as pd
 from scipy.sparse import issparse
@@ -21,12 +22,120 @@ def visualization(embedding, batch_labels, cell_types, save_path, batch_key='BAT
     adata = sc.pp.subsample(adata, fraction=0.3, random_state=42, copy=True)
     sc.pp.neighbors(adata)
     sc.tl.umap(adata)
-    sc.pl.umap(adata, color=[batch_key, label_key], frameon=False)
-    plt.savefig(save_path)
+
+    # Create figure with 2 subplots
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+    # Get unique categories and create color maps
+    batch_cats = sorted(adata.obs[batch_key].unique())
+    cell_cats = sorted(adata.obs[label_key].unique())
+
+    batch_palette = sc.pl.palettes.default_20 if len(batch_cats) <= 20 else sc.pl.palettes.default_102
+    cell_palette = sc.pl.palettes.default_20 if len(cell_cats) <= 20 else sc.pl.palettes.default_102
+
+    batch_colors = {cat: batch_palette[i] for i, cat in enumerate(batch_cats)}
+    cell_colors = {cat: cell_palette[i] for i, cat in enumerate(cell_cats)}
+
+    # Plot batch
+    sc.pl.umap(adata, color=batch_key, ax=axes[0], show=False, legend_loc=None,
+               frameon=False, title=batch_key, palette=[batch_colors[c] for c in batch_cats])
+
+    # Plot celltype
+    sc.pl.umap(adata, color=label_key, ax=axes[1], show=False, legend_loc=None,
+               frameon=False, title=label_key, palette=[cell_colors[c] for c in cell_cats])
+
+    # Add batch legend at bottom left
+    batch_handles = [Line2D([0], [0], marker='o', color='w', label=cat,
+                            markerfacecolor=batch_colors[cat], markersize=8)
+                     for cat in batch_cats]
+    axes[0].legend(handles=batch_handles, loc='upper center', bbox_to_anchor=(0.5, -0.05),
+                   ncol=min(len(batch_cats), 6), fontsize=8, frameon=False)
+
+    # Add celltype legend at bottom right
+    cell_handles = [Line2D([0], [0], marker='o', color='w', label=cat,
+                           markerfacecolor=cell_colors[cat], markersize=8)
+                    for cat in cell_cats]
+    axes[1].legend(handles=cell_handles, loc='upper center', bbox_to_anchor=(0.5, -0.05),
+                   ncol=min(len(cell_cats), 4), fontsize=8, frameon=False)
+
+    plt.subplots_adjust(bottom=0.2, wspace=0.15)
+    plt.savefig(save_path, bbox_inches='tight', dpi=150)
     plt.close()
 
 
-def best_leiden_by_nmi(adata: sc.AnnData, label_key: str, resolutions=(0.2, 0.4, 0.6, 0.8, 1.0)):
+def visualization_with_leiden(adata, save_path, batch_key='BATCH', label_key='celltype', seed=42):
+    """Create 3-panel UMAP: celltype, batch, and leiden cluster for eval phase.
+
+    Also saves leiden clustering result to adata.obs['leiden'].
+    """
+    # Compute neighbors on full adata for clustering
+    sc.pp.neighbors(adata, use_rep='X_biobatchnet', random_state=seed)
+
+    # Find best resolution and do leiden clustering on full data
+    nmi, ari, best_r = best_leiden_by_nmi(adata, label_key)
+    sc.tl.leiden(adata, key_added='leiden', resolution=best_r, random_state=seed)
+    n_clusters = adata.obs['leiden'].nunique()
+
+    # Record best resolution in adata.uns
+    adata.uns['leiden_resolution'] = best_r
+
+    # Subsample for visualization
+    adata_sub = sc.pp.subsample(adata, fraction=0.3, random_state=seed, copy=True)
+    sc.tl.umap(adata_sub, random_state=seed)
+
+    # Create figure with 3 subplots
+    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+
+    # Get unique categories and create color maps
+    cell_cats = sorted(adata_sub.obs[label_key].unique())
+    batch_cats = sorted(adata_sub.obs[batch_key].unique())
+    cluster_cats = sorted(adata_sub.obs['leiden'].unique(), key=lambda x: int(x))
+
+    cell_palette = sc.pl.palettes.default_20 if len(cell_cats) <= 20 else sc.pl.palettes.default_102
+    batch_palette = sc.pl.palettes.default_20 if len(batch_cats) <= 20 else sc.pl.palettes.default_102
+    cluster_palette = sc.pl.palettes.default_20 if len(cluster_cats) <= 20 else sc.pl.palettes.default_102
+
+    cell_colors = {cat: cell_palette[i] for i, cat in enumerate(cell_cats)}
+    batch_colors = {cat: batch_palette[i] for i, cat in enumerate(batch_cats)}
+    cluster_colors = {cat: cluster_palette[i] for i, cat in enumerate(cluster_cats)}
+
+    # Plot celltype
+    sc.pl.umap(adata_sub, color=label_key, ax=axes[0], show=False, legend_loc=None,
+               frameon=False, title='Cell Type', palette=[cell_colors[c] for c in cell_cats])
+
+    # Plot batch
+    sc.pl.umap(adata_sub, color=batch_key, ax=axes[1], show=False, legend_loc=None,
+               frameon=False, title='Batch', palette=[batch_colors[c] for c in batch_cats])
+
+    # Plot leiden
+    sc.pl.umap(adata_sub, color='leiden', ax=axes[2], show=False, legend_loc=None,
+               frameon=False, title=f'Leiden (n={n_clusters}, NMI={nmi:.3f}, ARI={ari:.3f})',
+               palette=[cluster_colors[c] for c in cluster_cats])
+
+    # Add celltype legend at bottom
+    cell_handles = [Line2D([0], [0], marker='o', color='w', label=cat,
+                           markerfacecolor=cell_colors[cat], markersize=6) for cat in cell_cats]
+    axes[0].legend(handles=cell_handles, loc='upper center', bbox_to_anchor=(0.5, -0.08),
+                   ncol=min(len(cell_cats), 4), fontsize=7, frameon=False)
+
+    # Add batch legend at bottom
+    batch_handles = [Line2D([0], [0], marker='o', color='w', label=cat,
+                            markerfacecolor=batch_colors[cat], markersize=6) for cat in batch_cats]
+    axes[1].legend(handles=batch_handles, loc='upper center', bbox_to_anchor=(0.5, -0.08),
+                   ncol=min(len(batch_cats), 6), fontsize=7, frameon=False)
+
+    # Add cluster legend at bottom
+    cluster_handles = [Line2D([0], [0], marker='o', color='w', label=f'C{cat}',
+                              markerfacecolor=cluster_colors[cat], markersize=6) for cat in cluster_cats]
+    axes[2].legend(handles=cluster_handles, loc='upper center', bbox_to_anchor=(0.5, -0.08),
+                   ncol=min(len(cluster_cats), 6), fontsize=7, frameon=False)
+
+    plt.subplots_adjust(bottom=0.2, wspace=0.15)
+    plt.savefig(save_path, bbox_inches='tight', dpi=150)
+    plt.close()
+
+
+def best_leiden_by_nmi(adata: sc.AnnData, label_key: str, resolutions=(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0)):
     best = (-1.0, -1.0, None) 
     y = adata.obs[label_key].values
     for r in resolutions:
@@ -46,8 +155,6 @@ def seq_preprocess(adata: sc.AnnData) -> sc.AnnData:
     if issparse(adata.X):
         adata.X = adata.X.toarray()
 
-    sc.pp.filter_cells(adata, min_genes=200)
-    sc.pp.filter_genes(adata, min_cells=3)
     sc.pp.highly_variable_genes(adata, n_top_genes=2000, flavor='seurat_v3', subset=True)
     sc.pp.normalize_total(adata, target_sum=1e4)
     sc.pp.log1p(adata)
@@ -63,10 +170,16 @@ def load_adata(path: str, data_type: str, preprocess: bool = False, batch_key: s
         adata = seq_preprocess(adata)
 
     data = adata.X.toarray() if issparse(adata.X) else np.array(adata.X)
-    
+
+    # Numeric codes for training
     batch_labels = pd.Categorical(adata.obs[batch_key]).codes
     cell_types = pd.Categorical(adata.obs[cell_type_key]).codes if cell_type_key in adata.obs.columns else None
-    return data, batch_labels, cell_types
+
+    # Original string labels for visualization
+    batch_names = adata.obs[batch_key].values
+    cell_type_names = adata.obs[cell_type_key].values if cell_type_key in adata.obs.columns else None
+
+    return data, batch_labels, cell_types, batch_names, cell_type_names
 
 
 def evaluate(

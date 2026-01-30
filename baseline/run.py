@@ -1,10 +1,13 @@
 from argparse import ArgumentParser
 import scanpy as sc
 from joblib import Parallel, delayed
+import pandas as pd
 
 from engines import RunBaseline
-from utils import save_adata_dict
+from utils import save_adata_dict, logger
 from config import BaselineConfig
+from evaluation import evaluate
+from visualization import visualize
 
 
 def run_single_method(rb, method, seed):
@@ -23,6 +26,10 @@ def main():
                        help='Comma-separated methods to run (default: all methods)')
     parser.add_argument('--n_jobs', type=int, default=1,
                        help='Number of parallel jobs (default: 1, use -1 for all CPUs)')
+    parser.add_argument('--eval', action='store_true', help='Run evaluation after methods')
+    parser.add_argument('--vis', action='store_true', help='Run visualization after methods')
+    parser.add_argument('--sample_frac', type=float, default=1.0,
+                       help='Sampling fraction for evaluation (default: 1.0)')
     args = parser.parse_args()
 
     config = BaselineConfig.load(args.config_path)
@@ -60,13 +67,27 @@ def main():
 
     save_adata_dict(adata_dict, args.save_dir, args.dataset)
 
+    # Evaluation
+    if args.eval:
+        logger.info("Running evaluation...")
+        metrics = evaluate(adata_dict, config, fraction=args.sample_frac, seed=args.seed)
+        df = pd.DataFrame(metrics).T
+        df.to_csv(f"{args.save_dir}/{args.dataset}/metrics.csv")
+        logger.info(f"Metrics:\n{df.to_string()}")
+
+    # Visualization
+    if args.vis:
+        logger.info("Running visualization...")
+        vis_dir = f"{args.save_dir}/{args.dataset}/visualization"
+        visualize(adata_dict, config, vis_dir)
+
 if __name__ == "__main__":
     main()
 
 
 """
 # Sequential
-python run.py --dataset SubMouseBrain --methods SeuratCCA,SeuratRPCA,FastMNN
+python run.py --dataset lung --methods Harmony
 
 # Parallel (3 jobs)
 python run.py --dataset macaque --methods FastMNN,SeuratRPCA --n_jobs 3

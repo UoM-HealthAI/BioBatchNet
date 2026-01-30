@@ -1,29 +1,39 @@
 # Baseline Configuration for Batch Effect Correction Methods
 
-# Method configurations
 methods:
-  scVI:
-    embed: X_scvi
-  iMAP:
-    embed: X_imap
-  MRVI:
-    embed: X_mrvi
   Harmony:
-    embed: X_pca_harmony
+    embed: X_harmony
+    stochastic: false
   BBKNN:
     embed: X_pca
+    stochastic: false
   Scanorama:
     embed: X_scanorama
+    stochastic: false
   Combat:
     embed: X_combat
-  CombatSeq:
-    embed: X_combatseq
+    stochastic: false
+  # CombatSeq:
+  #   embed: X_combatseq
+  #   stochastic: false
   SeuratCCA:
     embed: X_seurat_cca
+    stochastic: false
   SeuratRPCA:
     embed: X_seurat_rpca
+    stochastic: false
   FastMNN:
     embed: X_fastmnn
+    stochastic: false
+  scVI:
+    embed: X_scvi
+    stochastic: true
+  iMAP:
+    embed: X_imap
+    stochastic: true
+  MRVI:
+    embed: X_mrvi
+    stochastic: true
 
 # Dataset configurations
 datasets:
@@ -64,6 +74,13 @@ datasets:
 
   SubMouseBrain:
     path: /home/w29632hl/code/BatchEffect/BioBatchNet/DATA/scRNA/mousebrain.h5ad
+    mode: seq
+    sampling_fraction: 1.0
+    sampling_seed: 42
+    seed_list: [42, 52, 62, 72, 82]
+
+  lung:
+    path: /home/w29632hl/code/BatchEffect/BioBatchNet/DATA/scRNA/lung_atlas.h5ad
     mode: seq
     sampling_fraction: 1.0
     sampling_seed: 42

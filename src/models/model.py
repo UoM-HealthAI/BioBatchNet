@@ -136,7 +136,6 @@ class SeqBioBatchNet(nn.Module):
     def forward(self, x):
         # Bio encoding
         bio_z, bio_mu, bio_logvar = self.bio_encoder(x)
-        bio_logvar = torch.clamp(bio_logvar, min=-5, max=5)
 
         # Size factor encoding
         size_factor, size_mu, size_logvar = self.size_encoder(x)
@@ -144,8 +143,7 @@ class SeqBioBatchNet(nn.Module):
 
         # Batch encoding
         batch_z, batch_mu, batch_logvar = self.batch_encoder(x)
-        batch_logvar = torch.clamp(batch_logvar, min=-5, max=5)
-
+        
         # Combine
         z_combine = torch.cat([bio_z, batch_z.detach()], dim=1)
 
