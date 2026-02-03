@@ -7,8 +7,13 @@ from tqdm import tqdm
 from pathlib import Path
 
 from config import BaselineConfig
-from utils import load_all_adata, get_save_dir
+from utils import load_adata_from_dir
 from utils import logger
+
+
+OTHER_METHOD_EMBED = {
+    "BioBatchNet": "X_biobatchnet",
+}
 
 
 def compute_neighbors(adata_dict, config):
@@ -20,24 +25,20 @@ def compute_neighbors(adata_dict, config):
         config: BaselineConfig object
     """
     for method, adata in tqdm(adata_dict.items(), desc="Computing neighbors"):
+        # Skip if neighbors already computed (e.g., BBKNN)
+        if 'connectivities' in adata.obsp and 'distances' in adata.obsp:
+            continue
         if method == 'Raw':
+            sc.pp.highly_variable_genes(adata, n_top_genes=2000, flavor='seurat_v3', subset=True)
+            sc.pp.normalize_total(adata, target_sum=1e4)
+            sc.pp.log1p(adata)
             sc.pp.pca(adata)
             sc.pp.neighbors(adata, use_rep='X_pca')
         elif method in config.methods:
             embed = config.get_method(method).embed
             sc.pp.neighbors(adata, use_rep=embed)
         else:
-            # For methods not in config (e.g., BioBatchNet, scDREAMER)
-            # Try common embed names
-            if f'X_{method.lower()}' in adata.obsm:
-                sc.pp.neighbors(adata, use_rep=f'X_{method.lower()}')
-            elif 'X_emb' in adata.obsm:
-                sc.pp.neighbors(adata, use_rep='X_emb')
-            elif 'X_pca' in adata.obsm:
-                sc.pp.neighbors(adata, use_rep='X_pca')
-            else:
-                sc.pp.pca(adata)
-                sc.pp.neighbors(adata, use_rep='X_pca')
+            sc.pp.neighbors(adata, use_rep=OTHER_METHOD_EMBED[method])
 
 
 def plot_umap(adata_dict, color, save_path=None):
@@ -49,12 +50,15 @@ def plot_umap(adata_dict, color, save_path=None):
         color: Column name for coloring ('BATCH' or 'celltype')
         save_path: Path to save the figure
     """
-    methods = ['Raw'] + [k for k in adata_dict.keys() if k != 'Raw']
+    # Raw first, others by dict order, BioBatchNet last (bottom-right)
+    others = [k for k in adata_dict.keys() if k != 'Raw' and k != 'BioBatchNet']
+    bio = ['BioBatchNet'] if 'BioBatchNet' in adata_dict else []
+    methods = ['Raw'] + others + bio
     n_methods = len(methods)
-    n_rows = 2
-    n_cols = math.ceil(n_methods / n_rows)
+    n_cols = 6
+    n_rows = math.ceil(n_methods / n_cols)
 
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(6 * n_cols, 4 * n_rows))
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(4 * n_cols, 4 * n_rows))
     axes = axes.flatten()
 
     # Get unique categories and create color map
@@ -128,43 +132,25 @@ def visualize(adata_dict, config, save_dir, other_methods=None):
     logger.info(f"Visualization completed. Plots saved to {save_dir}")
 
 
-def load_adata_from_dir(save_dir):
-    """Load all h5ad files from directory."""
-    adata_dict = {}
-    for f in Path(save_dir).glob("*.h5ad"):
-        method = f.stem
-        adata_dict[method] = sc.read_h5ad(f)
-        logger.info(f"Loaded {method}")
-    return adata_dict
-
-
-def main(config, save_dir, other_methods=None):
+def main(config, adata_dir, other_methods=None):
     """
-    Load saved adata and visualize.
+    Load adata from adata_dir and save UMAP plots in the same directory.
 
     Args:
         config: BaselineConfig object
-        save_dir: Directory containing h5ad files
+        adata_dir: Directory containing h5ad files (plots saved here too)
         other_methods: Dict of additional methods {'method': 'path.h5ad'}
     """
-    # Load saved adata (try adata_results subdir first, then direct)
-    adata_results_dir = os.path.join(save_dir, 'adata_results')
-    if os.path.exists(adata_results_dir):
-        adata_dict = load_all_adata(save_dir)
-    else:
-        adata_dict = load_adata_from_dir(save_dir)
-
-    # Visualize
-    vis_dir = os.path.join(save_dir, 'visualization')
-    visualize(adata_dict, config, vis_dir, other_methods)
+    adata_dict = load_adata_from_dir(adata_dir)
+    visualize(adata_dict, config, adata_dir, other_methods)
 
 
 if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description='Visualize baseline results')
-    parser.add_argument('--save_dir', type=str, required=True,
-                       help='Directory containing h5ad files')
+    parser.add_argument('--adata_dir', '-d', type=str, required=True,
+                       help='Directory containing h5ad files; plots saved here')
     args = parser.parse_args()
 
     logger.info("Visualization script started.")
@@ -172,5 +158,5 @@ if __name__ == "__main__":
     config_path = Path(__file__).parent / "config.yaml"
     config = BaselineConfig.load(config_path)
 
-    main(config, args.save_dir)
+    main(config, args.adata_dir)
     logger.info("Visualization finished.")

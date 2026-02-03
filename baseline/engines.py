@@ -76,7 +76,7 @@ class RunBaseline:
             adata_imap = adata_base.copy()
             adata_imap.obs['batch'] = adata_imap.obs['BATCH']
             result = self._run_imap(adata_imap, seed)
-        elif method_name == 'MRVI':
+        elif method_name == 'MrVI':
             result = self._run_mrvi(adata_base.copy())
         elif method_name == 'Harmony':
             result = self._run_harmony(adata_base.copy())
@@ -249,9 +249,8 @@ class RunBaseline:
     def _run_mrvi(self, adata):
         from scvi.external import MRVI
         adata = self._ensure_counts_layer(adata)
-        sc.pp.highly_variable_genes(adata, n_top_genes=2000, flavor="seurat_v3",
-                                    subset=True, layer="counts")
-        MRVI.setup_anndata(adata, sample_key="BATCH", backend="torch")
+        sc.pp.highly_variable_genes(adata, n_top_genes=2000, flavor="seurat_v3", subset=True, layer="counts")
+        MRVI.setup_anndata(adata, sample_key="BATCH", layer="counts")
         model = MRVI(adata)
         model.train(max_epochs=400)
         adata.obsm["X_mrvi"] = model.get_latent_representation()

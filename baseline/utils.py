@@ -1,10 +1,10 @@
 import os
 import scanpy as sc
-import pandas as pd
 from tqdm import tqdm
 import logging
 from datetime import datetime
-
+from pathlib import Path
+import pandas as pd
 
 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 log_dir = "../Logs"
@@ -20,6 +20,16 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+
+
+def load_adata_from_dir(save_dir):
+    """Load all h5ad files from directory."""
+    adata_dict = {}
+    for f in Path(save_dir).glob("*.h5ad"):
+        method = f.stem
+        adata_dict[method] = sc.read_h5ad(f)
+        logger.info(f"Loaded {method}")
+    return adata_dict
 
 
 def save_adata_dict(adata_dict, save_dir, dataset_name):
@@ -111,17 +121,12 @@ def load_all_adata(save_dir):
 
 
 def append_method_result(save_dir, method_name, method_metrics, timing_row=None):
-    """Append one method's evaluation result (and timing) to CSV. Safer: one method at a time."""
+    """Append one method's evaluation result (and optional timing) to CSV. Safer: one method at a time."""
     metrics = sorted(method_metrics.keys())
     row = {'method': method_name}
     for m in metrics:
         row[f'{m}_mean'] = method_metrics[m]['mean']
         row[f'{m}_std'] = method_metrics[m]['std']
-    # Add timing to the same row
-    if timing_row is not None:
-        row['time_mean'] = timing_row['mean']
-        row['time_std'] = timing_row['std']
-
     results_path = os.path.join(save_dir, 'results.csv')
     df = pd.DataFrame([row])
     if os.path.exists(results_path):
@@ -129,6 +134,13 @@ def append_method_result(save_dir, method_name, method_metrics, timing_row=None)
     else:
         df.to_csv(results_path, index=False)
     logger.info(f"Results appended for {method_name} -> {results_path}")
+    if timing_row is not None:
+        timing_path = os.path.join(save_dir, 'timing_results.csv')
+        tdf = pd.DataFrame([{'method': method_name, 'mean': timing_row['mean'], 'std': timing_row['std']}])
+        if os.path.exists(timing_path):
+            tdf.to_csv(timing_path, mode='a', header=False, index=False)
+        else:
+            tdf.to_csv(timing_path, index=False)
 
 
 def get_save_dir(dataset_config, dataset_name):

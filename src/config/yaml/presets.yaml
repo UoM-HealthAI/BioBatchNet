@@ -40,11 +40,13 @@ immucan:
 pancreas:
   mode: seq
   data: /home/w29632hl/code/BatchEffect/BioBatchNet/DATA/scRNA/pancreas.h5ad
+  trainer:
+    epochs: 50
   loss:
     recon: 10
     discriminator: 0.04
     classifier: 1
-    kl_bio: 0.0000001
+    kl_bio: 1.0e-06
     kl_batch: 0.01
     ortho: 0.0002
     kl_size: 0.002
@@ -52,11 +54,13 @@ pancreas:
 macaque:
   mode: seq
   data: /home/w29632hl/code/BatchEffect/BioBatchNet/DATA/scRNA/macaque.h5ad
+  trainer:
+    epochs: 50
   loss:
     recon: 3
     discriminator: 0.02
     classifier: 0.02
-    kl_bio: 0.000001
+    kl_bio: 1.0e-05
     kl_batch: 0.01
     ortho: 0.0002
     kl_size: 0.002

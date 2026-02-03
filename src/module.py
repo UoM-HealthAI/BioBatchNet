@@ -87,9 +87,9 @@ class BaseBBNModule(pl.LightningModule):
         if self.save_dir and epoch % self.config.trainer.save_period == 0:
             if dataset.cell_type_names is not None:
                 loader = torch.utils.data.DataLoader(dataset, batch_size=128, shuffle=False)
-                bio_z, _ = self.get_embeddings(loader)
+                bio_z, batch_z = self.get_embeddings(loader)
                 save_path = self.save_dir / f'umap_epoch{epoch}.png'
-                visualization(bio_z, dataset.batch_names, dataset.cell_type_names, save_path)
+                visualization(bio_z, batch_z, dataset.batch_names, dataset.cell_type_names, save_path)
 
         # # Independence evaluation (epoch 0, 5, 10, ...)
         # inde_eval_period = self.config.trainer.inde_eval_period

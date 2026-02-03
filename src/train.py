@@ -96,8 +96,8 @@ def train(config: Config, seed: int = 42, run_name: Optional[str] = None, do_eva
         strategy='ddp' if devices > 1 else 'auto',
         devices=devices,
         deterministic=True,
-        gradient_clip_val=1.0,
-        gradient_clip_algorithm='norm',
+        # gradient_clip_val=1.0,
+        # gradient_clip_algorithm='norm',
     )
 
     # In DDP, every rank may hit filesystem writes later; ensure dirs exist everywhere.
@@ -140,7 +140,7 @@ def train(config: Config, seed: int = 42, run_name: Optional[str] = None, do_eva
             )
 
         # Save adata after visualization so it includes leiden results
-        adata.write(save_dir / 'adata.h5ad')
+        adata.write(save_dir / 'biobatchnet.h5ad')
 
         # Cast numpy/torch scalars to Python floats for serialization
         eval_metrics = {k: float(v) for k, v in eval_metrics.items()}
@@ -215,5 +215,5 @@ if __name__ == '__main__':
 
 
 """
-python -m src.train --config immucan --devices 1 --loss.discriminator 0.05 --bs 128 --seed 42
+python -m src.train --config pancreas --devices 1 --bs 256 --seed 43
 """

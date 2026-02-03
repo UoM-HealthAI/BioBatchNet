@@ -14,21 +14,34 @@ from sklearn.metrics import adjusted_rand_score, normalized_mutual_info_score, b
 import anndata as ad
 
 
-def visualization(embedding, batch_labels, cell_types, save_path, batch_key='BATCH', label_key='celltype'):
-    adata = ad.AnnData(embedding)
-    adata.obs[batch_key] = pd.Categorical(batch_labels)
-    adata.obs[label_key] = pd.Categorical(cell_types)
+def visualization(bio_z, batch_z, batch_labels, cell_types, save_path, batch_key='BATCH', label_key='celltype'):
+    """Create 2x2 UMAP visualization for bio_z and batch_z with batch and celltype coloring."""
+    # Create adata for bio_z
+    adata_bio = ad.AnnData(bio_z)
+    adata_bio.obs[batch_key] = pd.Categorical(batch_labels)
+    adata_bio.obs[label_key] = pd.Categorical(cell_types)
 
-    adata = sc.pp.subsample(adata, fraction=0.3, random_state=42, copy=True)
-    sc.pp.neighbors(adata)
-    sc.tl.umap(adata)
+    # Create adata for batch_z
+    adata_batch = ad.AnnData(batch_z)
+    adata_batch.obs[batch_key] = pd.Categorical(batch_labels)
+    adata_batch.obs[label_key] = pd.Categorical(cell_types)
 
-    # Create figure with 2 subplots
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+    # Subsample both
+    adata_bio = sc.pp.subsample(adata_bio, fraction=0.3, random_state=42, copy=True)
+    adata_batch = sc.pp.subsample(adata_batch, fraction=0.3, random_state=42, copy=True)
+
+    # Compute UMAP for both
+    sc.pp.neighbors(adata_bio)
+    sc.tl.umap(adata_bio)
+    sc.pp.neighbors(adata_batch)
+    sc.tl.umap(adata_batch)
+
+    # Create figure with 2x2 subplots
+    fig, axes = plt.subplots(2, 2, figsize=(14, 12))
 
     # Get unique categories and create color maps
-    batch_cats = sorted(adata.obs[batch_key].unique())
-    cell_cats = sorted(adata.obs[label_key].unique())
+    batch_cats = sorted(adata_bio.obs[batch_key].unique())
+    cell_cats = sorted(adata_bio.obs[label_key].unique())
 
     batch_palette = sc.pl.palettes.default_20 if len(batch_cats) <= 20 else sc.pl.palettes.default_102
     cell_palette = sc.pl.palettes.default_20 if len(cell_cats) <= 20 else sc.pl.palettes.default_102
@@ -36,29 +49,33 @@ def visualization(embedding, batch_labels, cell_types, save_path, batch_key='BAT
     batch_colors = {cat: batch_palette[i] for i, cat in enumerate(batch_cats)}
     cell_colors = {cat: cell_palette[i] for i, cat in enumerate(cell_cats)}
 
-    # Plot batch
-    sc.pl.umap(adata, color=batch_key, ax=axes[0], show=False, legend_loc=None,
-               frameon=False, title=batch_key, palette=[batch_colors[c] for c in batch_cats])
+    # Row 1: z_bio
+    sc.pl.umap(adata_bio, color=batch_key, ax=axes[0, 0], show=False, legend_loc=None,
+               frameon=False, title='z_bio - Batch', palette=[batch_colors[c] for c in batch_cats])
+    sc.pl.umap(adata_bio, color=label_key, ax=axes[0, 1], show=False, legend_loc=None,
+               frameon=False, title='z_bio - Cell Type', palette=[cell_colors[c] for c in cell_cats])
 
-    # Plot celltype
-    sc.pl.umap(adata, color=label_key, ax=axes[1], show=False, legend_loc=None,
-               frameon=False, title=label_key, palette=[cell_colors[c] for c in cell_cats])
+    # Row 2: z_batch
+    sc.pl.umap(adata_batch, color=batch_key, ax=axes[1, 0], show=False, legend_loc=None,
+               frameon=False, title='z_batch - Batch', palette=[batch_colors[c] for c in batch_cats])
+    sc.pl.umap(adata_batch, color=label_key, ax=axes[1, 1], show=False, legend_loc=None,
+               frameon=False, title='z_batch - Cell Type', palette=[cell_colors[c] for c in cell_cats])
 
-    # Add batch legend at bottom left
+    # Add legends
     batch_handles = [Line2D([0], [0], marker='o', color='w', label=cat,
                             markerfacecolor=batch_colors[cat], markersize=8)
                      for cat in batch_cats]
-    axes[0].legend(handles=batch_handles, loc='upper center', bbox_to_anchor=(0.5, -0.05),
-                   ncol=min(len(batch_cats), 6), fontsize=8, frameon=False)
-
-    # Add celltype legend at bottom right
     cell_handles = [Line2D([0], [0], marker='o', color='w', label=cat,
                            markerfacecolor=cell_colors[cat], markersize=8)
                     for cat in cell_cats]
-    axes[1].legend(handles=cell_handles, loc='upper center', bbox_to_anchor=(0.5, -0.05),
-                   ncol=min(len(cell_cats), 4), fontsize=8, frameon=False)
 
-    plt.subplots_adjust(bottom=0.2, wspace=0.15)
+    # Add legends to bottom row
+    axes[1, 0].legend(handles=batch_handles, loc='upper center', bbox_to_anchor=(0.5, -0.08),
+                      ncol=min(len(batch_cats), 6), fontsize=8, frameon=False)
+    axes[1, 1].legend(handles=cell_handles, loc='upper center', bbox_to_anchor=(0.5, -0.08),
+                      ncol=min(len(cell_cats), 4), fontsize=8, frameon=False)
+
+    plt.subplots_adjust(bottom=0.15, hspace=0.25, wspace=0.15)
     plt.savefig(save_path, bbox_inches='tight', dpi=150)
     plt.close()
 
@@ -135,7 +152,7 @@ def visualization_with_leiden(adata, save_path, batch_key='BATCH', label_key='ce
     plt.close()
 
 
-def best_leiden_by_nmi(adata: sc.AnnData, label_key: str, resolutions=(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0)):
+def best_leiden_by_nmi(adata: sc.AnnData, label_key: str, resolutions=(0.2, 0.4, 0.6, 0.8, 1.0)):
     best = (-1.0, -1.0, None) 
     y = adata.obs[label_key].values
     for r in resolutions:

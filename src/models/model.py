@@ -139,11 +139,10 @@ class SeqBioBatchNet(nn.Module):
 
         # Size factor encoding
         size_factor, size_mu, size_logvar = self.size_encoder(x)
-        size_logvar = torch.clamp(size_logvar, min=-5, max=5)
 
         # Batch encoding
         batch_z, batch_mu, batch_logvar = self.batch_encoder(x)
-        
+
         # Combine
         z_combine = torch.cat([bio_z, batch_z.detach()], dim=1)
 

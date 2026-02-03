@@ -13,9 +13,6 @@ methods:
   Combat:
     embed: X_combat
     stochastic: false
-  # CombatSeq:
-  #   embed: X_combatseq
-  #   stochastic: false
   SeuratCCA:
     embed: X_seurat_cca
     stochastic: false
@@ -31,7 +28,7 @@ methods:
   iMAP:
     embed: X_imap
     stochastic: true
-  MRVI:
+  MrVI:
     embed: X_mrvi
     stochastic: true
 

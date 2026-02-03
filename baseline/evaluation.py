@@ -1,8 +1,12 @@
+import os
 import scanpy as sc
 import scib
 import numpy as np
+import pandas as pd
+from pathlib import Path
 from config import BaselineConfig
 from sklearn.metrics import adjusted_rand_score, normalized_mutual_info_score
+from utils import load_adata_from_dir, logger
 
 
 def best_leiden_by_nmi(adata: sc.AnnData, label_key: str, resolutions=(0.2, 0.4, 0.6, 0.8, 1.0)):
@@ -42,8 +46,9 @@ def evaluate(adata_dict, config, fraction, seed):
     batch_key = 'BATCH'
     label_key = 'celltype'
 
-    # Prepare raw adata reference
     raw_adata = adata_dict.get('Raw')
+    if raw_adata is None:
+        raise ValueError("adata_dict must contain 'Raw'")
     sub_raw_adata = subsample_data(raw_adata, fraction=fraction, seed=seed)
     sc.pp.pca(sub_raw_adata)
     sc.pp.neighbors(sub_raw_adata, use_rep='X_pca')
@@ -52,17 +57,14 @@ def evaluate(adata_dict, config, fraction, seed):
         if method_name == 'Raw':
             continue
 
-        # Get method config
-        method_cfg = config.get_method(method_name)
-        embed = method_cfg.embed
+        if method_name in config.methods:
+            embed = config.get_method(method_name).embed
+        else:
+            logger.warning(f"Skip {method_name}: not in config")
+            continue
 
-        # Subsample and prepare
         sub_adata = subsample_data(adata, fraction=fraction, seed=seed)
-
-        # Compute neighbors
         sc.pp.neighbors(sub_adata, use_rep=embed)
-
-        # Compute metrics
         results[method_name] = compute_metrics(
             sub_raw_adata, sub_adata, batch_key, label_key, embed
         )
@@ -99,3 +101,31 @@ def compute_metrics(adata_raw, adata, batch_key, label_key, embed):
         'BioScore': bio_score,
         'TotalScore': total_score
     }
+
+
+def main():
+    import argparse
+    parser = argparse.ArgumentParser(description='Batch evaluate adata in a directory')
+    parser.add_argument('--dir', '-d', type=str, required=True,
+                       help='Directory containing h5ad files; metrics.csv saved here')
+    parser.add_argument('--config_path', type=str, default=None,
+                       help='Config yaml (default: baseline/config.yaml)')
+    parser.add_argument('--fraction', type=float, default=1.0, help='Subsample fraction')
+    parser.add_argument('--seed', type=int, default=42, help='Random seed')
+    args = parser.parse_args()
+
+    config_path = args.config_path or str(Path(__file__).parent / 'config.yaml')
+    config = BaselineConfig.load(config_path)
+    adata_dict = load_adata_from_dir(args.dir)
+    if not adata_dict:
+        logger.warning(f"No h5ad files in {args.dir}")
+        return
+
+    metrics = evaluate(adata_dict, config, fraction=args.fraction, seed=args.seed)
+    out_path = os.path.join(args.dir, 'metrics.csv')
+    pd.DataFrame(metrics).T.to_csv(out_path)
+    logger.info(f"Metrics saved to {out_path}")
+
+
+if __name__ == "__main__":
+    main()

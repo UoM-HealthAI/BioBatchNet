@@ -55,8 +55,7 @@ class Encoder(nn.Module):
         h = self.layers(x)
         mu = self.mu(h)
         logvar = self.logvar(h)
-        logvar = torch.clamp(logvar, min=-5.0, max=5.0)
-
+        logvar = torch.clamp(logvar, min=-5, max=5)
         z = self._reparameterize(mu, logvar)
         return z, mu, logvar
 
