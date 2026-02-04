@@ -26,12 +26,12 @@ hoch:
 
 immucan:
   mode: imc
-  data: /home/w29632hl/code/BatchEffect/BioBatchNet/DATA/IMC/IMMUcan.h5ad
+  data: /mnt/iusers01/fatpou01/compsci01/w29632hl/scratch/code/BatchEffect/BioBatchNet/DATA/IMC/IMMUcan.h5ad
   trainer:
     epochs: 30
   loss:
     recon: 10
-    discriminator: 0.1
+    discriminator: 0.3
     classifier: 1
     kl_bio: 0.005
     kl_batch: 0.1
@@ -39,7 +39,7 @@ immucan:
 
 pancreas:
   mode: seq
-  data: /home/w29632hl/code/BatchEffect/BioBatchNet/DATA/scRNA/pancreas.h5ad
+  data: /mnt/iusers01/fatpou01/compsci01/w29632hl/scratch/code/BatchEffect/BioBatchNet/DATA/scRNA/pancreas.h5ad
   trainer:
     epochs: 50
   loss:

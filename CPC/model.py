@@ -1,5 +1,6 @@
-import torch.nn as nn 
 import torch
+import torch.nn as nn
+
 
 class Autoencoder(nn.Module):
     def __init__(self, input_dim, latent_dim):
@@ -22,42 +23,31 @@ class Autoencoder(nn.Module):
             nn.ReLU(),
             nn.Linear(2000, input_dim),
         )
-    
+
     def forward(self, x):
         z = self.encoder(x)
         out = self.decoder(z)
         return z, out
 
-class DEC(nn.Module):
+
+class ConstrainedClustering(nn.Module):
     def __init__(self, input_dim, latent_dim, n_clusters):
-        super(DEC, self).__init__()
-        self.autoencoder = Autoencoder(input_dim, latent_dim=latent_dim)
+        super(ConstrainedClustering, self).__init__()
+        self.autoencoder = Autoencoder(input_dim, latent_dim)
         self.n_clusters = n_clusters
         self.latent_dim = latent_dim
-        
-        initial_cluster = torch.zeros(n_clusters, latent_dim, dtype=torch.float)
-        self.clusters = nn.Parameter(initial_cluster)
-    
-    def forward(self, x):
-        z, out = self.autoencoder(x)
-        q = self.calculate_q(z)
-        return q, z, out
-    
-    def calculate_q(self, z):
-        q = 1.0 / (1.0 + torch.sum((z.unsqueeze(1) - self.clusters) ** 2, dim=2))
-        q = q ** ((1 + 1) / 2.0)  
-        q = q / torch.sum(q, dim=1, keepdim=True)
-        return q
-    
-class ClusteringHead(nn.Module):
-    def __init__(self, embedding_dim, num_clusters):
-        super(ClusteringHead, self).__init__()
-        self.clustering = nn.Sequential(
-            nn.Linear(embedding_dim, 100),
-            nn.ReLU(),
-            nn.Linear(100, num_clusters),
-            nn.Softmax()
-        )
+
+        # Cluster centers as learnable parameters
+        self.clusters = nn.Parameter(torch.zeros(n_clusters, latent_dim))
 
     def forward(self, x):
-        return self.clustering(x)
+        z, out = self.autoencoder(x)
+        q = self.soft_assign(z)
+        return q, z, out
+
+    def soft_assign(self, z):
+        """Compute soft assignment (Student's t-distribution)."""
+        q = 1.0 / (1.0 + torch.sum((z.unsqueeze(1) - self.clusters) ** 2, dim=2))
+        q = q ** ((1 + 1) / 2.0)
+        q = q / torch.sum(q, dim=1, keepdim=True)
+        return q
