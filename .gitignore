@@ -75,4 +75,6 @@ log/
 **/fig/
 
 DATA/
+BBNDATA/
+upload_to_hf.py
 baseline/output/
