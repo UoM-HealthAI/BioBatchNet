@@ -15,16 +15,17 @@ from sklearn.metrics import normalized_mutual_info_score, adjusted_rand_score
 
 # Configuration - reuse from tumor_biomarker_analysis.py
 DISC_DIRS = {
-    0.05: '20260204_150407_disc_0.05',
-    0.1: '20260204_151101_disc_0.1',
-    0.3: '20260204_151803_disc_0.3',
+    0.05: '20260129_201004_disc0.05',
+    0.1: '20260129_185122_disc0.1',
+    0.3: '20260129_185122_disc0.3',
 }
 
-BASE_DIR = Path('/mnt/iusers01/fatpou01/compsci01/w29632hl/scratch/code/BatchEffect/BioBatchNet/src/saved/immucan')
-RAW_DATA_PATH = Path('/mnt/iusers01/fatpou01/compsci01/w29632hl/scratch/code/BatchEffect/BioBatchNet/DATA/IMC/IMMUcan.h5ad')
-OUTPUT_DIR = Path('/mnt/iusers01/fatpou01/compsci01/w29632hl/scratch/code/BatchEffect/BioBatchNet/DATA/IMC/tumor_analysis_disc_sweep')
+BASE_DIR = Path('/home/w29632hl/code/BatchEffect/BioBatchNet/src/saved/immucan')
+RAW_DATA_PATH = Path('/home/w29632hl/code/BatchEffect/BioBatchNet/BBNDATA/IMC/IMMUcan.h5ad')
+OUTPUT_DIR = Path('/home/w29632hl/code/BatchEffect/BioBatchNet/BBNDATA/Results/IMC/tumor_analysis')
 
 THRESHOLD = 0.5
+RESOLUTION = 0.8
 SEED = 42
 CONDITIONS = ['raw', 'disc0.05', 'disc0.1', 'disc0.3']
 
@@ -65,6 +66,7 @@ def process_condition(raw_adata, condition, corrected_path=None):
         sc.pp.neighbors(adata, use_rep='X_biobatchnet', random_state=SEED)
 
     _, _, best_res = best_leiden_by_nmi(adata, 'celltype', random_state=SEED)
+    # best_res = RESOLUTION
     sc.tl.leiden(adata, key_added='leiden', resolution=best_res, random_state=SEED)
 
     tumor_clusters = identify_tumor_clusters(adata)
@@ -86,24 +88,28 @@ def process_condition(raw_adata, condition, corrected_path=None):
     return adata, labels
 
 
+MIN_EDGE_CELLS = 80  
+TOPK = 2
+
+
 def build_sankey_data(tumor_df):
-    """Build sankey diagram data from tumor cell flow dataframe."""
+    """Build sankey diagram data from tumor cell flow dataframe.
+
+    For each source cluster, keep only top-K flow destinations.
+    Edges with fewer than MIN_EDGE_CELLS cells are dropped (no 'others' node).
+    """
+    # Collect real cluster nodes only (no others)
     all_nodes = []
     for cond in CONDITIONS:
         all_nodes.extend(tumor_df[cond].unique())
-    all_nodes = list(dict.fromkeys(all_nodes))  # Preserve order, remove duplicates
+    all_nodes = list(dict.fromkeys(all_nodes))
     node_to_idx = {node: i for i, node in enumerate(all_nodes)}
 
-    # Collect flows between consecutive conditions
-    sources = []
-    targets = []
-    values = []
-    colors = []
+    sources, targets, values, colors = [], [], [], []
 
     # Color palette for patients
     patients = tumor_df['patient'].unique()
     n_patients = len(patients)
-    # Generate distinct colors for each patient
     colorscale = [
         f'rgba({int(255 * (i / n_patients))}, {int(100 + 100 * ((i * 3) % n_patients) / n_patients)}, {int(255 * (1 - i / n_patients))}, 0.5)'
         for i in range(n_patients)
@@ -114,14 +120,42 @@ def build_sankey_data(tumor_df):
         src_col = CONDITIONS[i]
         tgt_col = CONDITIONS[i + 1]
 
-        # Group by source, target, and patient
         flow_counts = tumor_df.groupby([src_col, tgt_col, 'patient']).size().reset_index(name='count')
+        if flow_counts.empty:
+            continue
 
-        for _, row in flow_counts.iterrows():
-            sources.append(node_to_idx[row[src_col]])
-            targets.append(node_to_idx[row[tgt_col]])
-            values.append(row['count'])
-            colors.append(patient_to_color[row['patient']])
+        pair_counts = flow_counts.groupby([src_col, tgt_col], as_index=False)['count'].sum()
+
+        n_kept, n_dropped = 0, 0
+        for src_node, src_pairs in pair_counts.groupby(src_col):
+            src_pairs = src_pairs.sort_values('count', ascending=False)
+            top = src_pairs.head(TOPK)
+
+            for _, row in top.iterrows():
+                tgt = row[tgt_col]
+                val = int(row['count'])
+                if val < MIN_EDGE_CELLS:
+                    n_dropped += 1
+                    continue  # 直接忽略小边
+
+                # 按 patient 拆边，Plotly 会自动堆叠成一条粗线分段染色
+                patient_rows = flow_counts[(flow_counts[src_col] == src_node) & (flow_counts[tgt_col] == tgt)]
+                for patient, pcount in patient_rows.groupby('patient')['count'].sum().items():
+                    if pcount > 0:
+                        sources.append(node_to_idx[src_node])
+                        targets.append(node_to_idx[tgt])
+                        values.append(int(pcount))
+                        colors.append(patient_to_color[patient])
+                n_kept += 1
+
+        print(f"  {src_col} -> {tgt_col}: kept {n_kept} edges, dropped {n_dropped} (< {MIN_EDGE_CELLS})")
+
+    # --- compress nodes: keep only nodes that appear in links ---
+    used = set(sources) | set(targets)
+    old_to_new = {old_i: new_i for new_i, old_i in enumerate(sorted(used))}
+    all_nodes = [all_nodes[old_i] for old_i in sorted(used)]
+    sources = [old_to_new[s] for s in sources]
+    targets = [old_to_new[t] for t in targets]
 
     return all_nodes, sources, targets, values, colors, patient_to_color
 
@@ -137,20 +171,18 @@ def create_sankey_figure(all_nodes, sources, targets, values, colors, patient_to
         node_x.append(cond_idx / (len(CONDITIONS) - 1))
         node_y.append(0.5)  # Let plotly handle y positioning
 
-    # Node colors: gray for undefined, blue for tumor clusters
-    node_colors = []
-    for node in all_nodes:
-        if 'undefined' in node:
-            node_colors.append('rgba(150, 150, 150, 0.8)')
-        else:
-            node_colors.append('rgba(100, 149, 237, 0.8)')  # Cornflower blue
+    # Node colors: all gray
+    node_colors = ['rgba(180, 180, 180, 0.8)' for _ in all_nodes]
+
+    # Node labels: hide cluster numbers
+    node_labels = ['' for _ in all_nodes]
 
     fig = go.Figure(go.Sankey(
         node=dict(
             pad=15,
             thickness=20,
             line=dict(color='black', width=0.5),
-            label=all_nodes,
+            label=node_labels,
             color=node_colors,
             x=node_x,
         ),
@@ -161,6 +193,18 @@ def create_sankey_figure(all_nodes, sources, targets, values, colors, patient_to
             color=colors,
         )
     ))
+
+    # Add condition names as column headers
+    for i, cond in enumerate(CONDITIONS):
+        fig.add_annotation(
+            x=i / (len(CONDITIONS) - 1),
+            y=1.08,
+            text=f"<b>{cond.replace('disc', 'disc ')}</b>",
+            showarrow=False,
+            font=dict(size=14),
+            xref='x',
+            yref='paper',
+        )
 
     # Add legend for patients
     # Create invisible scatter traces for legend
@@ -174,10 +218,12 @@ def create_sankey_figure(all_nodes, sources, targets, values, colors, patient_to
         ))
 
     fig.update_layout(
-        title_text="Tumor Cell Flow Across Batch Correction Strengths<br><sub>Edges colored by Patient (BATCH)</sub>",
+        title_text="",
         font_size=12,
         width=1200,
         height=800,
+        xaxis=dict(visible=False, showticklabels=False, showgrid=False, zeroline=False),
+        yaxis=dict(visible=False, showticklabels=False, showgrid=False, zeroline=False),
     )
 
     return fig
@@ -199,7 +245,7 @@ def main():
 
     # Corrected conditions
     for disc, disc_dir in sorted(DISC_DIRS.items()):
-        path = BASE_DIR / disc_dir / 'seed_42' / 'biobatchnet.h5ad'
+        path = BASE_DIR / disc_dir / 'seed_42' / 'adata.h5ad'
         cond_name = f'disc{disc}'
         _, labels = process_condition(raw_adata, cond_name, path)
         condition_labels[cond_name] = labels

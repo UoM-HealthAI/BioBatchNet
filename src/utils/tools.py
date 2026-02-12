@@ -83,18 +83,14 @@ def visualization(bio_z, batch_z, batch_labels, cell_types, save_path, batch_key
 def visualization_with_leiden(adata, save_path, batch_key='BATCH', label_key='celltype', seed=42):
     """Create 3-panel UMAP: celltype, batch, and leiden cluster for eval phase.
 
-    Also saves leiden clustering result to adata.obs['leiden'].
+    Expects neighbors and leiden to already be computed on adata by evaluate().
     """
-    # Compute neighbors on full adata for clustering
-    sc.pp.neighbors(adata, use_rep='X_biobatchnet', random_state=seed)
-
-    # Find best resolution and do leiden clustering on full data
-    nmi, ari, best_r = best_leiden_by_nmi(adata, label_key)
-    sc.tl.leiden(adata, key_added='leiden', resolution=best_r, random_state=seed)
+    # Read existing leiden results (computed by evaluate())
+    y = adata.obs[label_key].values
+    pred = adata.obs['leiden'].values
+    nmi = normalized_mutual_info_score(y, pred)
+    ari = adjusted_rand_score(y, pred)
     n_clusters = adata.obs['leiden'].nunique()
-
-    # Record best resolution in adata.uns
-    adata.uns['leiden_resolution'] = best_r
 
     # Subsample for visualization
     adata_sub = sc.pp.subsample(adata, fraction=0.3, random_state=seed, copy=True)
@@ -152,11 +148,11 @@ def visualization_with_leiden(adata, save_path, batch_key='BATCH', label_key='ce
     plt.close()
 
 
-def best_leiden_by_nmi(adata: sc.AnnData, label_key: str, resolutions=(0.2, 0.4, 0.6, 0.8, 1.0)):
-    best = (-1.0, -1.0, None) 
+def best_leiden_by_nmi(adata: sc.AnnData, label_key: str, resolutions=(0.2, 0.4, 0.6, 0.8, 1.0), random_state=42):
+    best = (-1.0, -1.0, None)
     y = adata.obs[label_key].values
     for r in resolutions:
-        sc.tl.leiden(adata, key_added='cluster', resolution=r)
+        sc.tl.leiden(adata, key_added='cluster', resolution=r, random_state=random_state)
         pred = adata.obs['cluster'].values
         nmi = normalized_mutual_info_score(y, pred)
         ari = adjusted_rand_score(y, pred)
@@ -207,10 +203,17 @@ def evaluate(
     label_key='celltype',
     fraction=1.0,
 ):
+    # Compute neighbors + leiden on FULL adata (results persist for visualization)
+    sc.pp.neighbors(adata, use_rep=embed, random_state=42)
+    nmi, ari, best_r = best_leiden_by_nmi(adata, label_key, random_state=42)
+    sc.tl.leiden(adata, key_added='leiden', resolution=best_r, random_state=42)
+    adata.uns['leiden_resolution'] = best_r
+
+    # Subsample for expensive scib batch metrics
     adata_sub = sc.pp.subsample(adata, fraction=fraction, random_state=42, copy=True)
     adata_raw_sub = adata_raw[adata_sub.obs_names].copy()
 
-    sc.pp.neighbors(adata_sub, use_rep=embed)
+    sc.pp.neighbors(adata_sub, use_rep=embed, random_state=42)
     sc.pp.pca(adata_raw_sub)
     sc.pp.neighbors(adata_raw_sub, use_rep='X_pca')
 
@@ -220,9 +223,8 @@ def evaluate(
     asw_batch = scib.me.silhouette_batch(adata_sub, batch_key=batch_key, label_key=label_key, embed=embed)
     pcr = scib.me.pcr_comparison(adata_raw_sub, adata_sub, covariate=batch_key, embed=embed)
 
-    # Biological conservation metrics
+    # Biological conservation metrics (leiden NMI/ARI from full data above)
     asw_cell = scib.me.silhouette(adata_sub, label_key=label_key, embed=embed)
-    nmi, ari, _best_r = best_leiden_by_nmi(adata_sub, label_key)
 
     # Aggregate scores
     batch_score = (ilisi + graph_conn + asw_batch + pcr) / 4

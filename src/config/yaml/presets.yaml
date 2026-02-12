@@ -67,12 +67,14 @@ macaque:
 
 mousebrain:
   mode: seq
-  data: /home/w29632hl/code/BatchEffect/BioBatchNet/DATA/scRNA/mousebrain.h5ad
+  data: /home/w29632hl/code/BatchEffect/BioBatchNet/BBNDATA/scRNA/mousebrain.h5ad
+  trainer:
+    epochs: 50
   loss:
     recon: 2
-    discriminator: 0.1
-    classifier: 0.01
-    kl_bio: 0.000001
+    discriminator: 0.3
+    classifier: 1
+    kl_bio: 0.0005
     kl_batch: 0.01
     ortho: 0.001
     kl_size: 0.01

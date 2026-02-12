@@ -16,7 +16,7 @@ from pytorch_lightning.loggers import WandbLogger
 from .config import Config
 from .module import IMCModule, SeqModule
 from .utils.dataset import BBNDataset
-from .utils.tools import load_adata, evaluate, independence_metrics, visualization_with_leiden
+from .utils.tools import load_adata, evaluate, visualization_with_leiden
 
 SAVE_ROOT = Path(__file__).parent / 'saved'
 
@@ -113,45 +113,45 @@ def train(config: Config, seed: int = 42, run_name: Optional[str] = None, do_eva
         adata.obsm['X_biobatchnet'] = z_bio
         adata.obsm['X_batch'] = z_batch
 
-        # if do_eval:
-        #     eval_metrics = evaluate(
-        #         adata, adata_raw,
-        #         embed='X_biobatchnet',
-        #         batch_key=config.data.batch_key,
-        #         label_key=config.data.cell_type_key,
-        #         fraction=config.trainer.sampling_fraction,
-        #     )
-        #     for k, v in eval_metrics.items():
-        #         print(f"{k}: {v:.4f}")
+        if do_eval:
+            eval_metrics = evaluate(
+                adata, adata_raw,
+                embed='X_biobatchnet',
+                batch_key=config.data.batch_key,
+                label_key=config.data.cell_type_key,
+                fraction=config.trainer.sampling_fraction,
+            )
+            for k, v in eval_metrics.items():
+                print(f"{k}: {v:.4f}")
 
-        #     # Visualization with leiden clustering (also adds leiden to adata.obs)
-        #     visualization_with_leiden(
-        #         adata,
-        #         save_path=save_dir / 'umap.png',
-        #         batch_key=config.data.batch_key,
-        #         label_key=config.data.cell_type_key,
-        #         seed=seed,
-        #     )
+            # Visualization with leiden clustering (also adds leiden to adata.obs)
+            visualization_with_leiden(
+                adata,
+                save_path=save_dir / 'umap.png',
+                batch_key=config.data.batch_key,
+                label_key=config.data.cell_type_key,
+                seed=seed,
+            )
 
         # Save adata after visualization so it includes leiden results
         adata.write(save_dir / 'biobatchnet.h5ad')
 
-        # # Cast numpy/torch scalars to Python floats for serialization
-        # eval_metrics = {k: float(v) for k, v in eval_metrics.items()}
+        # Cast numpy/torch scalars to Python floats for serialization
+        eval_metrics = {k: float(v) for k, v in eval_metrics.items()}
 
-        # # Also save a simple CSV row where metrics dicts are stored as strings
-        # csv_path = save_dir / 'metrics.csv'
-        # write_header = not csv_path.exists()
-        # with open(csv_path, 'a', newline='') as f:
-        #     w = csv.DictWriter(f, fieldnames=['preset', 'run_name', 'seed', 'eval'])
-        #     if write_header:
-        #         w.writeheader()
-        #     w.writerow({
-        #         'preset': config.preset,
-        #         'run_name': run_name,
-        #         'seed': seed,
-        #         'eval': json.dumps(eval_metrics),
-        #     })
+        # Also save a simple CSV row where metrics dicts are stored as strings
+        csv_path = save_dir / 'metrics.csv'
+        write_header = not csv_path.exists()
+        with open(csv_path, 'a', newline='') as f:
+            w = csv.DictWriter(f, fieldnames=['preset', 'run_name', 'seed', 'eval'])
+            if write_header:
+                w.writeheader()
+            w.writerow({
+                'preset': config.preset,
+                'run_name': run_name,
+                'seed': seed,
+                'eval': json.dumps(eval_metrics),
+            })
 
 
     return model, adata, eval_metrics, inde_metrics
@@ -209,5 +209,5 @@ if __name__ == '__main__':
 
 
 """
-python -m src.train --config pancreas --devices 1 --bs 256
+python -m src.train --config mousebrain --devices 1 --loss.discriminator 0.05 --run_name disc0.05
 """

@@ -8,13 +8,14 @@ from pathlib import Path
 import argparse
 
 
-def plot_lambda_comparison(base_dir: str, output_dir: str = None):
+def plot_lambda_comparison(base_dir: str, output_dir: str = None, lambdas: list = None):
     """
     Plot UMAP for different lambda (disc) values.
 
     Args:
         base_dir: Directory containing disc* subdirectories
         output_dir: Where to save figures (defaults to base_dir)
+        lambdas: Optional list of lambda values to include (filters others out)
     """
     base_dir = Path(base_dir)
     output_dir = Path(output_dir) if output_dir else base_dir
@@ -28,6 +29,8 @@ def plot_lambda_comparison(base_dir: str, output_dir: str = None):
             lambda_str = d.name.split('_disc')[-1]
             try:
                 lambda_val = float(lambda_str)
+                if lambdas is not None and lambda_val not in lambdas:
+                    continue
                 disc_dirs.append((lambda_val, d))
             except ValueError:
                 continue
@@ -45,7 +48,7 @@ def plot_lambda_comparison(base_dir: str, output_dir: str = None):
     adata_list = []
     lambda_vals = []
     for lambda_val, d in disc_dirs:
-        adata_path = d / "seed_42" / "adata.h5ad"
+        adata_path = d / "seed_42" / "biobatchnet.h5ad"
         if adata_path.exists():
             adata = sc.read_h5ad(adata_path)
             adata_list.append(adata)
@@ -118,6 +121,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Plot UMAP comparison across lambda values')
     parser.add_argument('base_dir', type=str, help='Directory containing disc* subdirectories')
     parser.add_argument('--output', '-o', type=str, default=None, help='Output directory (default: base_dir)')
+    parser.add_argument('--lambdas', '-l', type=float, nargs='+', default=None, help='Specific lambda values to include')
     args = parser.parse_args()
 
-    plot_lambda_comparison(args.base_dir, args.output)
+    plot_lambda_comparison(args.base_dir, args.output, args.lambdas)
