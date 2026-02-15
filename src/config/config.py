@@ -133,7 +133,6 @@ class Config:
         preset_dict = {
             'mode': preset['mode'],
             'preset': dataset,
-            'data': {'path': preset.get('data')},
             'model': preset.get('model', {}),
             'loss': preset.get('loss', {}),
             'trainer': preset.get('trainer', {}),

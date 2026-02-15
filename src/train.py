@@ -160,6 +160,7 @@ def train(config: Config, seed: int = 42, run_name: Optional[str] = None, do_eva
 def main():
     parser = argparse.ArgumentParser(description='BioBatchNet Training')
     parser.add_argument('--config', type=str, required=True, help='Config YAML path or preset name')
+    parser.add_argument('--data', type=str, required=True, help='Path to .h5ad data file')
     parser.add_argument('--seed', type=int, default=42, help='Random seed')
     parser.add_argument('--run_name', type=str, default=None, help='Run name (save dir + wandb)')
     parser.add_argument('--no-eval', action='store_true', help='Skip evaluation metrics')
@@ -181,6 +182,7 @@ def main():
     args = parser.parse_args()
 
     config = Config.load(args.config)
+    config.data.path = args.data
 
     # Apply overrides
     if args.use_bn:
@@ -209,5 +211,5 @@ if __name__ == '__main__':
 
 
 """
-python -m src.train --config mousebrain --devices 1 --loss.discriminator 0.05 --run_name disc0.05
+python -m src.train --config mousebrain --data path/to/mousebrain.h5ad
 """

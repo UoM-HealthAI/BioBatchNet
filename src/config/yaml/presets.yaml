@@ -1,6 +1,5 @@
 damond:
   mode: imc
-  data: /home/w29632hl/code/BatchEffect/BioBatchNet/BBNDATA/IMC/subDamond_full.h5ad
   trainer:
     epochs: 30
     sampling_fraction: 0.2
@@ -14,7 +13,6 @@ damond:
 
 hoch:
   mode: imc
-  data: /home/w29632hl/code/BatchEffect/BioBatchNet/BBNDATA/IMC/HochSchulz.h5ad
   trainer:
     epochs: 30
     sampling_fraction: 0.1
@@ -28,7 +26,6 @@ hoch:
 
 immucan:
   mode: imc
-  data: /home/w29632hl/code/BatchEffect/BioBatchNet/BBNDATA/IMC/IMMUcan.h5ad
   trainer:
     epochs: 30
   loss:
@@ -41,7 +38,6 @@ immucan:
 
 pancreas:
   mode: seq
-  data: /home/w29632hl/code/BatchEffect/BioBatchNet/BBNDATA/scRNA/pancreas.h5ad
   trainer:
     epochs: 50
   loss:
@@ -55,7 +51,6 @@ pancreas:
 
 macaque:
   mode: seq
-  data: /home/w29632hl/code/BatchEffect/BioBatchNet/BBNDATA/scRNA/macaque.h5ad
   trainer:
     epochs: 50
   loss:
@@ -69,7 +64,6 @@ macaque:
 
 lung:
   mode: seq
-  data: /home/w29632hl/code/BatchEffect/BioBatchNet/BBNDATA/scRNA/lung_atlas.h5ad
   trainer:
     epochs: 100
   loss:
@@ -83,7 +77,6 @@ lung:
 
 mousebrain:
   mode: seq
-  data: /home/w29632hl/code/BatchEffect/BioBatchNet/BBNDATA/scRNA/mousebrain.h5ad
   trainer:
     epochs: 50
   loss:
@@ -94,4 +87,3 @@ mousebrain:
     kl_batch: 0.01
     ortho: 0.001
     kl_size: 0.01
-
