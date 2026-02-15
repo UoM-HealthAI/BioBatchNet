@@ -211,5 +211,5 @@ if __name__ == '__main__':
 
 
 """
-python -m src.train --config mousebrain --data path/to/mousebrain.h5ad
+python -m biobatchnet.train --config mousebrain --data path/to/mousebrain.h5ad
 """
