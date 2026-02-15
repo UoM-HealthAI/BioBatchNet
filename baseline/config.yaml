@@ -35,49 +35,49 @@ methods:
 # Dataset configurations
 datasets:
   subDamond_full:
-    path: ../Data/IMC/h5ad_format/subDamond_full.h5ad
+    path: <path/to/subDamond_full.h5ad>
     mode: imc
     sampling_fraction: 0.2
     sampling_seed: 42
     seed_list: [42, 52, 62, 72, 82]
 
   HochSchulz:
-    path: ../Data/IMC/h5ad_format/HochSchulz.h5ad
+    path: <path/to/HochSchulz.h5ad>
     mode: imc
     sampling_fraction: 0.1
     sampling_seed: 42
     seed_list: [42, 52, 62, 72, 82]
 
   IMMUcan_batch:
-    path: ../Data/IMC/h5ad_format/IMMUcan_batch.h5ad
+    path: <path/to/IMMUcan.h5ad>
     mode: imc
     sampling_fraction: 1.0
     sampling_seed: 42
     seed_list: [42, 52, 62, 72, 82]
 
   pancreas:
-    path: /home/w29632hl/code/BatchEffect/BioBatchNet/DATA/scRNA/pancreas.h5ad
+    path: <path/to/pancreas.h5ad>
     mode: seq
     sampling_fraction: 1.0
     sampling_seed: 42
     seed_list: [42, 52, 62, 72, 82]
 
   macaque:
-    path: /home/w29632hl/code/BatchEffect/BioBatchNet/DATA/scRNA/macaque.h5ad
+    path: <path/to/macaque.h5ad>
     mode: seq
     sampling_fraction: 1.0
     sampling_seed: 42
     seed_list: [42, 52, 62, 72, 82]
 
   SubMouseBrain:
-    path: /home/w29632hl/code/BatchEffect/BioBatchNet/DATA/scRNA/mousebrain.h5ad
+    path: <path/to/mousebrain.h5ad>
     mode: seq
     sampling_fraction: 1.0
     sampling_seed: 42
     seed_list: [42, 52, 62, 72, 82]
 
   lung:
-    path: /home/w29632hl/code/BatchEffect/BioBatchNet/DATA/scRNA/lung_atlas.h5ad
+    path: <path/to/lung_atlas.h5ad>
     mode: seq
     sampling_fraction: 1.0
     sampling_seed: 42
