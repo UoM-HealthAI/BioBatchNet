@@ -1,81 +1,52 @@
-# Ignore generated folders
-BioBatchNet/saved/
-BioBatchNet/Results/
-BioBatchNet/logger/
-BioBatchNet/wandb/
-BioBatchNet/bash/
-
-Baseline/results/
-Baseline/notebook/
-Baseline/bash/
-Baseline/scib/
-
-CPC/results/
-CPC/CPC_main.py
-CPC/CPC_experiment/IMMU_raw.ipynb
-CPC/CPC_experiment/IMMU_scvi.ipynb
-
+# Data
 Data/
 data/
-csf_log/
-Logs/
-Results/
-bash/
+BBNDATA/
+
+# Training outputs
 saved/
+results/
 wandb/
-BaselineResults/
+log/
+**/fig/
+baseline/output/
 
-
-# Ignore Python virtual environments
-venv/
-env/
-
-# Ignore Python cache files
+# Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+venv/
+env/
 
-# Ignore Jupyter Notebook checkpoints
+# Build and packaging
+dist/
+build/
+*.egg-info/
+
+# Jupyter
 .ipynb_checkpoints/
 
-# Ignore OS generated files
-.DS_Store
-CLAUDE.md
-Thumbs.db
-
-# Ignore IDE/editor configuration files
+# IDE
 .vscode/
 .idea/
 *.sublime-workspace
 *.sublime-project
 
-# Ignore log files
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
 *.log
 
-# Ignore environment configuration files
+# Environment
 *.env
 
-# Build and packaging artifacts
-dist/
-build/
-*.egg-info/
-
-# Test, coverage, and tooling caches
+# Test and coverage
 .pytest_cache/
 .mypy_cache/
 .tox/
 htmlcov/
 .coverage
 coverage.xml
-
-# Training/checkpoint outputs (project-specific)
-temp_training/
-log/
-**/fig/
-
-DATA/
-BBNDATA/
-upload_to_hf.py
-baseline/output/
-results/
