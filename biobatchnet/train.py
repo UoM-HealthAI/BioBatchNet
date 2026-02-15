@@ -161,6 +161,8 @@ def main():
     parser = argparse.ArgumentParser(description='BioBatchNet Training')
     parser.add_argument('--config', type=str, required=True, help='Config YAML path or preset name')
     parser.add_argument('--data', type=str, required=True, help='Path to .h5ad data file')
+    parser.add_argument('--batch_key', type=str, default=None, help='obs column for batch labels (default: BATCH)')
+    parser.add_argument('--cell_type_key', type=str, default=None, help='obs column for cell type labels (default: celltype)')
     parser.add_argument('--seed', type=int, default=42, help='Random seed')
     parser.add_argument('--run_name', type=str, default=None, help='Run name (save dir + wandb)')
     parser.add_argument('--no-eval', action='store_true', help='Skip evaluation metrics')
@@ -183,6 +185,10 @@ def main():
 
     config = Config.load(args.config)
     config.data.path = args.data
+    if args.batch_key:
+        config.data.batch_key = args.batch_key
+    if args.cell_type_key:
+        config.data.cell_type_key = args.cell_type_key
 
     # Apply overrides
     if args.use_bn:
