@@ -162,19 +162,30 @@ def build_sankey_data(tumor_df):
 
 def create_sankey_figure(all_nodes, sources, targets, values, colors, patient_to_color):
     """Create plotly sankey diagram."""
-    # Node positions: arrange by condition
-    node_x = []
-    node_y = []
-    for node in all_nodes:
+    # Node positions: arrange by condition, undefined at bottom
+    from collections import defaultdict
+    cond_nodes = defaultdict(list)
+    for i, node in enumerate(all_nodes):
         cond = node.rsplit('_', 1)[0]
+        cond_nodes[cond].append((i, node))
+
+    node_x = [0.0] * len(all_nodes)
+    node_y = [0.0] * len(all_nodes)
+    for cond, nodes in cond_nodes.items():
         cond_idx = CONDITIONS.index(cond) if cond in CONDITIONS else 0
-        node_x.append(cond_idx / (len(CONDITIONS) - 1))
-        node_y.append(0.5)  # Let plotly handle y positioning
+        # Sort: regular clusters first, undefined last
+        nodes.sort(key=lambda x: (1 if 'undefined' in x[1] else 0, x[1]))
+        n = len(nodes)
+        for rank, (idx, _node) in enumerate(nodes):
+            node_x[idx] = cond_idx / (len(CONDITIONS) - 1)
+            node_y[idx] = 0.01 + rank * 0.98 / max(n - 1, 1)
 
-    # Node colors: all gray
-    node_colors = ['rgba(180, 180, 180, 0.8)' for _ in all_nodes]
+    # Node colors: gray for tumor clusters, dark red for undefined
+    CLUSTER_COLOR = 'rgba(180, 160, 210, 0.8)'
+    UNDEF_COLOR = 'rgba(200, 80, 80, 0.8)'
+    node_colors = [UNDEF_COLOR if 'undefined' in node else CLUSTER_COLOR for node in all_nodes]
 
-    # Node labels: hide cluster numbers
+    # Node labels: hide
     node_labels = ['' for _ in all_nodes]
 
     fig = go.Figure(go.Sankey(
@@ -198,7 +209,7 @@ def create_sankey_figure(all_nodes, sources, targets, values, colors, patient_to
     for i, cond in enumerate(CONDITIONS):
         fig.add_annotation(
             x=i / (len(CONDITIONS) - 1),
-            y=1.08,
+            y=1.05,
             text=f"<b>{cond.replace('disc', 'disc ')}</b>",
             showarrow=False,
             font=dict(size=14),
@@ -206,8 +217,19 @@ def create_sankey_figure(all_nodes, sources, targets, values, colors, patient_to
             yref='paper',
         )
 
-    # Add legend for patients
-    # Create invisible scatter traces for legend
+    # Add legend: node types (use opacity 1.0 to match Sankey rendering)
+    fig.add_trace(go.Scatter(
+        x=[None], y=[None], mode='markers',
+        marker=dict(size=10, color=CLUSTER_COLOR.replace('0.8)', '1)'), symbol='square'),
+        name='Tumor cluster', showlegend=True
+    ))
+    fig.add_trace(go.Scatter(
+        x=[None], y=[None], mode='markers',
+        marker=dict(size=10, color=UNDEF_COLOR.replace('0.8)', '1)'), symbol='square'),
+        name='Undefined (non-tumor-majority)', showlegend=True
+    ))
+
+    # Add legend: patients
     for patient, color in patient_to_color.items():
         fig.add_trace(go.Scatter(
             x=[None], y=[None],

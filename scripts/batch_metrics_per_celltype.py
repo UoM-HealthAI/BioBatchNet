@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from pathlib import Path
 import argparse
+import json
 
 
 def compute_metrics_per_celltype(
@@ -103,6 +104,11 @@ def compute_metrics_per_celltype(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     plot_metrics(df, output_dir)
+
+    json_path = output_dir / 'batch_metrics_per_celltype.json'
+    with open(json_path, 'w') as f:
+        json.dump(df.to_dict(orient='records'), f, indent=2)
+    print(f"Saved: {json_path}")
 
     return df
 

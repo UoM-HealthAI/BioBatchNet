@@ -8,7 +8,7 @@ from pathlib import Path
 import argparse
 
 
-def plot_lambda_comparison(base_dir: str, output_dir: str = None, lambdas: list = None):
+def plot_lambda_comparison(base_dir: str, output_dir: str = None, lambdas: list = None, raw_path: str = None, preprocess: bool = False):
     """
     Plot UMAP for different lambda (disc) values.
 
@@ -16,6 +16,7 @@ def plot_lambda_comparison(base_dir: str, output_dir: str = None, lambdas: list 
         base_dir: Directory containing disc* subdirectories
         output_dir: Where to save figures (defaults to base_dir)
         lambdas: Optional list of lambda values to include (filters others out)
+        raw_path: Optional path to raw h5ad file (plotted as leftmost panel)
     """
     base_dir = Path(base_dir)
     output_dir = Path(output_dir) if output_dir else base_dir
@@ -49,6 +50,8 @@ def plot_lambda_comparison(base_dir: str, output_dir: str = None, lambdas: list 
     lambda_vals = []
     for lambda_val, d in disc_dirs:
         adata_path = d / "seed_42" / "biobatchnet.h5ad"
+        if not adata_path.exists():
+            adata_path = d / "seed_42" / "adata.h5ad"
         if adata_path.exists():
             adata = sc.read_h5ad(adata_path)
             adata_list.append(adata)
@@ -61,13 +64,36 @@ def plot_lambda_comparison(base_dir: str, output_dir: str = None, lambdas: list 
         print("No adata files found")
         return
 
+    # Prepend raw data if provided
+    if raw_path:
+        from scipy.sparse import issparse
+        adata_raw = sc.read_h5ad(raw_path)
+        # Apply seq_preprocess for scRNA-seq data (HVG + normalize + log1p)
+        if preprocess:
+            from sys import path as sys_path
+            sys_path.insert(0, str(Path(__file__).resolve().parent.parent / 'src'))
+            from utils.tools import seq_preprocess
+            adata_raw = seq_preprocess(adata_raw)
+            print("Applied seq_preprocess to raw data")
+        X = adata_raw.X.toarray() if issparse(adata_raw.X) else adata_raw.X
+        adata_raw.obsm['X_expr'] = X
+        sc.pp.neighbors(adata_raw, use_rep='X_expr')
+        sc.tl.umap(adata_raw)
+        sc.tl.leiden(adata_raw, key_added='leiden_0.6', resolution=0.6, random_state=42)
+        adata_list.insert(0, adata_raw)
+        lambda_vals.insert(0, None)  # sentinel for raw
+        print("Loaded raw data")
+
     n_plots = len(adata_list)
 
-    # Compute UMAP for all
-    for adata in adata_list:
+    # Compute UMAP for all (skip raw, already computed above)
+    for i, adata in enumerate(adata_list):
+        if lambda_vals[i] is None:
+            continue
         if 'X_umap' not in adata.obsm:
             sc.pp.neighbors(adata, use_rep='X_biobatchnet')
             sc.tl.umap(adata)
+        sc.tl.leiden(adata, key_added='leiden_0.6', resolution=0.6, random_state=42)
 
     # Plot function for a given color
     def make_figure(color_key: str, save_name: str):
@@ -86,15 +112,16 @@ def plot_lambda_comparison(base_dir: str, output_dir: str = None, lambdas: list 
 
         for i, (adata, lambda_val) in enumerate(zip(adata_list, lambda_vals)):
             ax = axes[i]
+            title = "Raw" if lambda_val is None else f"λ = {lambda_val}"
             sc.pl.umap(
                 adata, color=color_key, ax=ax, show=False,
                 legend_loc=None, frameon=False,
-                title=f"λ = {lambda_val}",
+                title=title,
                 palette=[color_map[cat] for cat in unique_categories]
             )
             ax.set_xlabel('')
             ax.set_ylabel('')
-            ax.set_title(f"λ = {lambda_val}", fontsize=12)
+            ax.set_title(title, fontsize=12)
 
         # Add legend at bottom
         from matplotlib.lines import Line2D
@@ -115,6 +142,7 @@ def plot_lambda_comparison(base_dir: str, output_dir: str = None, lambdas: list 
     # Make both figures
     make_figure('BATCH', 'lambda_comparison_batch.png')
     make_figure('celltype', 'lambda_comparison_celltype.png')
+    make_figure('leiden_0.6', 'lambda_comparison_leiden.png')
 
 
 if __name__ == "__main__":
@@ -122,6 +150,8 @@ if __name__ == "__main__":
     parser.add_argument('base_dir', type=str, help='Directory containing disc* subdirectories')
     parser.add_argument('--output', '-o', type=str, default=None, help='Output directory (default: base_dir)')
     parser.add_argument('--lambdas', '-l', type=float, nargs='+', default=None, help='Specific lambda values to include')
+    parser.add_argument('--raw', '-r', type=str, default=None, help='Path to raw h5ad file (plotted as leftmost panel)')
+    parser.add_argument('--preprocess', '-p', action='store_true', help='Apply seq_preprocess (HVG+normalize+log1p) to raw data')
     args = parser.parse_args()
 
-    plot_lambda_comparison(args.base_dir, args.output, args.lambdas)
+    plot_lambda_comparison(args.base_dir, args.output, args.lambdas, args.raw, args.preprocess)

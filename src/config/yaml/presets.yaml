@@ -1,6 +1,9 @@
 damond:
   mode: imc
-  data: /home/w29632hl/code/BatchEffect/BioBatchNet/DATA/IMC/subDamond_full.h5ad
+  data: /home/w29632hl/code/BatchEffect/BioBatchNet/BBNDATA/IMC/subDamond_full.h5ad
+  trainer:
+    epochs: 30
+    sampling_fraction: 0.2
   loss:
     recon: 10
     discriminator: 0.3
@@ -8,25 +11,24 @@ damond:
     kl_bio: 0.001
     kl_batch: 0.1
     ortho: 0.01
-  trainer:
-    sampling_fraction: 0.2
 
 hoch:
   mode: imc
-  data: /home/w29632hl/code/BatchEffect/BioBatchNet/DATA/IMC/HochSchulz.h5ad
+  data: /home/w29632hl/code/BatchEffect/BioBatchNet/BBNDATA/IMC/HochSchulz.h5ad
+  trainer:
+    epochs: 30
+    sampling_fraction: 0.1
   loss:
     recon: 10
     discriminator: 0.1
     classifier: 1
-    kl_bio: 0.0
+    kl_bio: 0.001
     kl_batch: 0.1
     ortho: 0.01
-  trainer:
-    sampling_fraction: 0.1
 
 immucan:
   mode: imc
-  data: /mnt/iusers01/fatpou01/compsci01/w29632hl/scratch/code/BatchEffect/BioBatchNet/DATA/IMC/IMMUcan.h5ad
+  data: /home/w29632hl/code/BatchEffect/BioBatchNet/BBNDATA/IMC/IMMUcan.h5ad
   trainer:
     epochs: 30
   loss:
@@ -39,7 +41,7 @@ immucan:
 
 pancreas:
   mode: seq
-  data: /mnt/iusers01/fatpou01/compsci01/w29632hl/scratch/code/BatchEffect/BioBatchNet/DATA/scRNA/pancreas.h5ad
+  data: /home/w29632hl/code/BatchEffect/BioBatchNet/BBNDATA/scRNA/pancreas.h5ad
   trainer:
     epochs: 50
   loss:
@@ -53,7 +55,7 @@ pancreas:
 
 macaque:
   mode: seq
-  data: /home/w29632hl/code/BatchEffect/BioBatchNet/DATA/scRNA/macaque.h5ad
+  data: /home/w29632hl/code/BatchEffect/BioBatchNet/BBNDATA/scRNA/macaque.h5ad
   trainer:
     epochs: 50
   loss:
@@ -61,6 +63,20 @@ macaque:
     discriminator: 0.02
     classifier: 0.02
     kl_bio: 1.0e-05
+    kl_batch: 0.01
+    ortho: 0.0002
+    kl_size: 0.002
+
+lung:
+  mode: seq
+  data: /home/w29632hl/code/BatchEffect/BioBatchNet/BBNDATA/scRNA/lung_atlas.h5ad
+  trainer:
+    epochs: 100
+  loss:
+    recon: 10
+    discriminator: 0.01
+    classifier: 1
+    kl_bio: 0.000001
     kl_batch: 0.01
     ortho: 0.0002
     kl_size: 0.002
@@ -79,16 +95,3 @@ mousebrain:
     ortho: 0.001
     kl_size: 0.01
 
-lung:
-  mode: seq
-  data: /home/w29632hl/code/BatchEffect/BioBatchNet/DATA/scRNA/lung_atlas.h5ad
-  trainer:
-    epochs: 100
-  loss:
-    recon: 10
-    discriminator: 0.01
-    classifier: 1
-    kl_bio: 0.000001
-    kl_batch: 0.01
-    ortho: 0.0002
-    kl_size: 0.002
