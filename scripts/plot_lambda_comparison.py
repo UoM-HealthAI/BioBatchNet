@@ -2,10 +2,16 @@
 Plot UMAP comparison across different disentanglement lambda values.
 Creates two figures: one colored by batch, one colored by celltype.
 """
+import math
 import scanpy as sc
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 from pathlib import Path
 import argparse
+
+LEGEND_Y = -0.05
+SUBPLOTS_BOTTOM = 0.05
+TITLE_FONTSIZE = 14
 
 
 def plot_lambda_comparison(base_dir: str, output_dir: str = None, lambdas: list = None, raw_path: str = None, preprocess: bool = False):
@@ -95,9 +101,13 @@ def plot_lambda_comparison(base_dir: str, output_dir: str = None, lambdas: list 
             sc.tl.umap(adata)
         sc.tl.leiden(adata, key_added='leiden_0.6', resolution=0.6, random_state=42)
 
-    # Plot function for a given color
+    # Plot function: single row of UMAPs for a given color_key
     def make_figure(color_key: str, save_name: str):
-        fig, axes = plt.subplots(1, n_plots, figsize=(4 * n_plots, 4))
+        fig, axes = plt.subplots(
+            1, n_plots,
+            figsize=(6 * n_plots, 4),
+            constrained_layout=False,
+        )
         if n_plots == 1:
             axes = [axes]
 
@@ -117,29 +127,37 @@ def plot_lambda_comparison(base_dir: str, output_dir: str = None, lambdas: list 
                 adata, color=color_key, ax=ax, show=False,
                 legend_loc=None, frameon=False,
                 title=title,
-                palette=[color_map[cat] for cat in unique_categories]
+                palette=[color_map[cat] for cat in unique_categories],
             )
-            ax.set_xlabel('')
-            ax.set_ylabel('')
-            ax.set_title(title, fontsize=12)
+            ax.set_title(title, fontsize=TITLE_FONTSIZE)
+            ax.set_xlabel("")
+            ax.set_ylabel("")
+            ax.set_xticks([])
+            ax.set_yticks([])
+            ax.set_aspect("equal", adjustable="box")
+            ax.margins(0.02)
 
         # Add legend at bottom
-        from matplotlib.lines import Line2D
-        handles = [Line2D([0], [0], marker='o', color='w', label=cat,
-                          markerfacecolor=color_map[cat], markersize=8)
-                   for cat in unique_categories]
-        fig.legend(handles, unique_categories, loc='upper center',
-                   ncol=min(len(unique_categories), 10), fontsize=10,
-                   bbox_to_anchor=(0.5, 0.08))
-
-        plt.subplots_adjust(bottom=0.15, top=0.9, wspace=0.1)
+        handles = [
+            Line2D([0], [0], marker="o", color="w", label=cat,
+                   markerfacecolor=color_map[cat], markersize=8)
+            for cat in unique_categories
+        ]
+        fig.legend(
+            handles, unique_categories,
+            loc="lower center",
+            ncol=min(len(unique_categories), 10),
+            fontsize=TITLE_FONTSIZE,
+            bbox_to_anchor=(0.5, LEGEND_Y),
+        )
+        plt.subplots_adjust(bottom=SUBPLOTS_BOTTOM, top=0.92, wspace=0.05)
 
         save_path = output_dir / save_name
         plt.savefig(save_path, bbox_inches='tight', dpi=150)
         print(f"Saved: {save_path}")
-        plt.close()
+        plt.close(fig)
 
-    # Make both figures
+    # Make separate figures
     make_figure('BATCH', 'lambda_comparison_batch.png')
     make_figure('celltype', 'lambda_comparison_celltype.png')
     make_figure('leiden_0.6', 'lambda_comparison_leiden.png')

@@ -1,67 +1,104 @@
+"""
+Single-file UMAP visualization: load h5ad from dir, plot BATCH and celltype per method.
+No external project imports; logic inlined from BioBatchNet-main/baseline.
+"""
+import argparse
+import logging
 import math
 import os
-import scanpy as sc
-import matplotlib.pyplot as plt
-from matplotlib.lines import Line2D
-from tqdm import tqdm
 from pathlib import Path
 
-from config import BaselineConfig
-from utils import load_adata_from_dir
-from utils import logger
+import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
+import scanpy as sc
+from tqdm import tqdm
 
-
-OTHER_METHOD_EMBED = {
+# Config: method name -> obsm key for embedding (from baseline config.yaml)
+METHOD_EMBED = {
+    "Harmony": "X_harmony",
+    "BBKNN": "X_pca",
+    "Scanorama": "X_scanorama",
+    "Combat": "X_combat",
+    "SeuratCCA": "X_seurat_cca",
+    "SeuratRPCA": "X_seurat_rpca",
+    "FastMNN": "X_fastmnn",
+    "scVI": "X_scvi",
+    "iMAP": "X_imap",
+    "MrVI": "X_mrvi",
     "BioBatchNet": "X_biobatchnet",
 }
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
 
-def compute_neighbors(adata_dict, config):
-    """
-    Compute neighbors for UMAP visualization based on config.
+LEGEND_Y = 0.05
+SUBPLOTS_BOTTOM = 0.12
+TITLE_FONTSIZE = 14
 
-    Args:
-        adata_dict: Dictionary of adata objects
-        config: BaselineConfig object
+
+def load_adata_from_dir(save_dir):
+    """Load all h5ad files from directory (from baseline utils)."""
+    adata_dict = {}
+    for f in Path(save_dir).glob("*.h5ad"):
+        method = f.stem
+        adata_dict[method] = sc.read_h5ad(f)
+        logger.info(f"Loaded {method}")
+    return adata_dict
+
+
+def subsample_adata_dict(adata_dict, fraction=1.0, seed=42):
+    """Subsample each adata by fraction (for faster UMAP). fraction=1.0 means no sampling."""
+    if fraction >= 1.0:
+        return adata_dict
+    out = {}
+    for method, adata in tqdm(adata_dict.items(), desc="Sampling"):
+        out[method] = sc.pp.subsample(adata, fraction=fraction, random_state=seed, copy=True)
+    logger.info(f"Subsampled to {fraction*100:.0f}% (seed={seed})")
+    return out
+
+
+def compute_neighbors(adata_dict):
+    """Compute neighbors for UMAP: Raw -> PCA+neighbors; others -> use METHOD_EMBED.
+    BBKNN (and similar) often have pre-computed obsp connectivities/distances -> skip and use them for UMAP.
     """
     for method, adata in tqdm(adata_dict.items(), desc="Computing neighbors"):
-        # Skip if neighbors already computed (e.g., BBKNN)
-        if 'connectivities' in adata.obsp and 'distances' in adata.obsp:
-            continue
-        if method == 'Raw':
-            sc.pp.highly_variable_genes(adata, n_top_genes=2000, flavor='seurat_v3', subset=True)
-            sc.pp.normalize_total(adata, target_sum=1e4)
-            sc.pp.log1p(adata)
+        if "connectivities" in adata.obsp and "distances" in adata.obsp:
+            continue  # e.g. BBKNN: already has batch-aware graph
+        if method == "Raw":
             sc.pp.pca(adata)
-            sc.pp.neighbors(adata, use_rep='X_pca')
-        elif method in config.methods:
-            embed = config.get_method(method).embed
-            sc.pp.neighbors(adata, use_rep=embed)
+            sc.pp.neighbors(adata, use_rep="X_pca")
         else:
-            sc.pp.neighbors(adata, use_rep=OTHER_METHOD_EMBED[method])
+            rep = METHOD_EMBED.get(method, "X_biobatchnet")
+            if rep not in adata.obsm.keys():
+                rep = "X"  # e.g. iMAP may store embedding in adata.X
+                logger.info(f"  {method}: use_rep='X' (obsm has {list(adata.obsm.keys())})")
+            else:
+                logger.info(f"  {method}: use_rep='{rep}'")
+            sc.pp.neighbors(adata, use_rep=rep)
 
 
 def plot_umap(adata_dict, color, save_path=None):
     """
-    Plot UMAP for all methods.
-
-    Args:
-        adata_dict: Dictionary of adata objects
-        color: Column name for coloring ('BATCH' or 'celltype')
-        save_path: Path to save the figure
+    Plot one UMAP figure: one subplot per method, colored by `color` (BATCH or celltype).
+    Layout: fixed 2 rows, columns = ceil(n_methods / 2), panel size ~ 6x4 (like your other script).
     """
-    # Raw first, others by dict order, BioBatchNet last (bottom-right)
-    others = [k for k in adata_dict.keys() if k != 'Raw' and k != 'BioBatchNet']
-    bio = ['BioBatchNet'] if 'BioBatchNet' in adata_dict else []
-    methods = ['Raw'] + others + bio
+    # Method ordering: Raw first, BioBatchNet last (if present), others in-between (keep current dict order)
+    others = [k for k in adata_dict.keys() if k not in ("Raw", "BioBatchNet")]
+    methods = (["Raw"] if "Raw" in adata_dict else []) + others + (["BioBatchNet"] if "BioBatchNet" in adata_dict else [])
     n_methods = len(methods)
-    n_cols = 6
-    n_rows = math.ceil(n_methods / n_cols)
 
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(4 * n_cols, 4 * n_rows))
+    # ---- Layout: match "6 4" style ----
+    n_rows = 2
+    n_cols = math.ceil(n_methods / n_rows)
+
+    fig, axes = plt.subplots(
+        n_rows, n_cols,
+        figsize=(6 * n_cols, 4 * n_rows),
+        constrained_layout=False
+    )
     axes = axes.flatten()
 
-    # Get unique categories and create color map
+    # ---- Palette (global, consistent across methods) ----
     unique_categories = set()
     for method in methods:
         unique_categories.update(adata_dict[method].obs[color].unique())
@@ -70,93 +107,91 @@ def plot_umap(adata_dict, color, save_path=None):
     palette = sc.pl.palettes.default_20 if len(unique_categories) <= 20 else sc.pl.palettes.default_102
     color_map = {cat: palette[i] for i, cat in enumerate(unique_categories)}
 
-    for i, method in enumerate(tqdm(methods, desc="Plotting UMAP")):
+    # ---- Plot panels ----
+    for i, method in enumerate(tqdm(methods, desc=f"Plotting UMAP ({color})")):
         ax = axes[i]
         adata = adata_dict[method]
 
-        sc.tl.umap(adata)
-        sc.pl.umap(
-            adata, color=color, ax=ax, show=False,
-            legend_loc=None, frameon=False, title=method,
-            palette=[color_map[cat] for cat in unique_categories]
-        )
-        ax.set_xlabel('')
-        ax.set_ylabel('')
+        # Compute UMAP if not exists (avoid recompute if already computed)
+        if "X_umap" not in adata.obsm_keys():
+            sc.tl.umap(adata)
 
-    # Remove extra axes
+        sc.pl.umap(
+            adata,
+            color=color,
+            ax=ax,
+            show=False,
+            legend_loc=None,
+            frameon=False,
+            title=method,
+            palette=[color_map[cat] for cat in unique_categories],
+        )
+        ax.set_title(method, fontsize=TITLE_FONTSIZE)
+
+        # Make panels visually consistent & less "stretched"
+        ax.set_xlabel("")
+        ax.set_ylabel("")
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_aspect("equal", adjustable="box")
+        ax.margins(0.02)
+
+    # Remove unused axes
     for j in range(n_methods, len(axes)):
         fig.delaxes(axes[j])
 
-    # Add legend
-    handles = [Line2D([0], [0], marker='o', color='w', label=cat,
-                      markerfacecolor=color_map[cat], markersize=10)
-               for cat in unique_categories]
-    fig.legend(handles, unique_categories, loc='upper center',
-               ncol=min(len(unique_categories), 10), fontsize=12,
-               bbox_to_anchor=(0.5, 0.05))
-
-    plt.subplots_adjust(bottom=0.07, top=0.95, hspace=0.1, wspace=0.1)
+    # ---- Global legend (bottom, like your current style) ----
+    handles = [
+        Line2D([0], [0], marker="o", color="w", label=cat,
+               markerfacecolor=color_map[cat], markersize=8)
+        for cat in unique_categories
+    ]
+    fig.legend(
+        handles, unique_categories,
+        loc="lower center",
+        ncol=min(len(unique_categories), 10),
+        fontsize=TITLE_FONTSIZE,
+        bbox_to_anchor=(0.5, LEGEND_Y)
+    )
+    plt.subplots_adjust(bottom=SUBPLOTS_BOTTOM, top=0.95, hspace=0.10, wspace=0.05)
 
     if save_path:
-        plt.savefig(save_path, bbox_inches='tight', dpi=150)
+        plt.savefig(save_path, bbox_inches="tight", dpi=150)
         logger.info(f"Saved plot to {save_path}")
 
-    plt.close()
+    plt.close(fig)
 
 
-def visualize(adata_dict, config, save_dir, other_methods=None):
-    """
-    Run full visualization pipeline.
-
-    Args:
-        adata_dict: Dictionary of adata objects
-        config: BaselineConfig object
-        save_dir: Directory to save plots
-        other_methods: Dict of additional methods to include {'method': 'path.h5ad'}
-    """
-    # Integrate other methods if provided
+def visualize(adata_dict, save_dir, other_methods=None, fraction=1.0, seed=42):
+    """Load optional other h5ad, optionally subsample, compute neighbors, save umap_batch.png and umap_celltype.png."""
     if other_methods:
         for method, path in other_methods.items():
             if os.path.exists(path):
                 adata_dict[method] = sc.read_h5ad(path)
                 logger.info(f"Loaded {method} from {path}")
 
-    # Compute neighbors
-    compute_neighbors(adata_dict, config)
-
-    # Plot UMAP
+    if fraction < 1.0:
+        adata_dict = subsample_adata_dict(adata_dict, fraction=fraction, seed=seed)
+    compute_neighbors(adata_dict)
     os.makedirs(save_dir, exist_ok=True)
-    plot_umap(adata_dict, 'BATCH', os.path.join(save_dir, 'umap_batch.png'))
-    plot_umap(adata_dict, 'celltype', os.path.join(save_dir, 'umap_celltype.png'))
-
+    plot_umap(adata_dict, "BATCH", os.path.join(save_dir, "umap_batch.png"))
+    plot_umap(adata_dict, "celltype", os.path.join(save_dir, "umap_celltype.png"))
     logger.info(f"Visualization completed. Plots saved to {save_dir}")
 
 
-def main(config, adata_dir, other_methods=None):
-    """
-    Load adata from adata_dir and save UMAP plots in the same directory.
-
-    Args:
-        config: BaselineConfig object
-        adata_dir: Directory containing h5ad files (plots saved here too)
-        other_methods: Dict of additional methods {'method': 'path.h5ad'}
-    """
+def main(adata_dir, other_methods=None, fraction=1.0, seed=42):
+    """Load adata from adata_dir and save UMAP plots there."""
     adata_dict = load_adata_from_dir(adata_dir)
-    visualize(adata_dict, config, adata_dir, other_methods)
+    visualize(adata_dict, adata_dir, other_methods, fraction=fraction, seed=seed)
 
 
 if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser(description='Visualize baseline results')
-    parser.add_argument('--adata_dir', '-d', type=str, required=True,
-                       help='Directory containing h5ad files; plots saved here')
+    parser = argparse.ArgumentParser(description="Visualize baseline results (all methods UMAP)")
+    parser.add_argument("--adata_dir", "-d", type=str, required=True, help="Directory containing h5ad files; plots saved here")
+    parser.add_argument("--fraction", "-f", type=float, default=0.3, help="Subsample fraction (0-1), default 1.0 = no sampling")
+    parser.add_argument("--seed", type=int, default=42, help="Random seed for subsampling")
     args = parser.parse_args()
 
     logger.info("Visualization script started.")
-
-    config_path = Path(__file__).parent / "config.yaml"
-    config = BaselineConfig.load(config_path)
-
-    main(config, args.adata_dir)
+    main(args.adata_dir, fraction=args.fraction, seed=args.seed)
     logger.info("Visualization finished.")
