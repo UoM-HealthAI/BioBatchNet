@@ -1,6 +1,5 @@
 include README.md
 include LICENSE
-include USAGE.md
 include tutorial.ipynb
 recursive-include biobatchnet/config *.yaml
 recursive-include biobatchnet *.py

@@ -1,6 +1,7 @@
 """Simple API for batch effect correction."""
 import torch
 import numpy as np
+import scanpy as sc
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader
 from pytorch_lightning.callbacks import EarlyStopping
@@ -9,6 +10,7 @@ from scipy.sparse import issparse
 from .config import Config, LossConfig, TrainerConfig
 from .module import IMCModule, SeqModule
 from .utils.dataset import BBNDataset
+from .utils.tools import seq_preprocess
 
 
 def correct_batch_effects(
@@ -31,6 +33,7 @@ def correct_batch_effects(
         batch_key: Column name in adata.obs for batch labels.
         cell_type_key: Optional column name in adata.obs for cell type labels.
         data_type: 'imc' for Imaging Mass Cytometry, 'seq' for scRNA-seq.
+            When 'seq', automatic preprocessing is applied (HVG 2000 + normalize + log1p).
         latent_dim: Latent space dimension (default: 20).
         epochs: Maximum training epochs (default: 100).
         lr: Learning rate (default: 1e-4).
@@ -53,6 +56,10 @@ def correct_batch_effects(
         >>> bio_emb, batch_emb = correct_batch_effects(adata, batch_key='BATCH', data_type='imc')
         >>> adata.obsm['X_biobatchnet'] = bio_emb
     """
+    # Auto-preprocess for scRNA-seq: HVG selection + normalize + log1p
+    if data_type == 'seq':
+        adata = seq_preprocess(adata)
+
     # Extract expression matrix
     X = adata.X
     if issparse(X):
@@ -118,7 +125,7 @@ def correct_batch_effects(
     # Train
     trainer = pl.Trainer(
         max_epochs=epochs,
-        callbacks=[EarlyStopping(monitor='loss', patience=15, mode='min')],
+        callbacks=[EarlyStopping(monitor='loss', patience=5, mode='min')],
         accelerator=device,
         devices=1,
         enable_progress_bar=True,
