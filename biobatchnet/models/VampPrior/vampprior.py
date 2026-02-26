@@ -214,7 +214,6 @@ class VampEncoder(Model):
     # THE MODEL: VARIATIONAL POSTERIOR
     def q_z2(self, x):
         # q(z2 | x)
-        print(self.q_z2_layers)
         x = self.q_z2_layers(x)
 
         z2_q_mean = self.q_z2_mean(x)

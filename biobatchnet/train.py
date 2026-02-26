@@ -164,8 +164,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-
-"""
-python -m biobatchnet.train --config mousebrain --data path/to/mousebrain.h5ad
-"""

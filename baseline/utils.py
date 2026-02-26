@@ -61,7 +61,7 @@ def load_h5ad_files(directory):
     }
 
     result_dict = {}    
-    for file_name, key in tqdm(file_key_map.items(), desc="loadding files", unit='file'):
+    for file_name, key in tqdm(file_key_map.items(), desc="loading files", unit='file'):
         file_path = os.path.join(directory, file_name)
         print(file_path)
         if os.path.exists(file_path):  
@@ -74,7 +74,7 @@ def load_h5ad_files(directory):
 def sampling(adata_dict, fraction=0.3):
     """Subsample adata dict with given fraction."""
     sampling_adata_dict = {}
-    for key, adata in tqdm(adata_dict.items(), desc="samlping adata", unit="adata"):
+    for key, adata in tqdm(adata_dict.items(), desc="sampling adata", unit="adata"):
         adata = sc.pp.subsample(adata, fraction=fraction).copy()
         sampling_adata_dict[key] = adata.copy()
     return sampling_adata_dict

@@ -47,12 +47,6 @@ def orthogonal_loss(z1, z2):
     return ortho_loss
 
 
-def l1_loss(model):
-    l1 = 0.0
-    for param in model.encoder2.parameters():
-        l1 += torch.sum(torch.abs(param))  
-    return l1
-
 
 def kl_divergence(mu, logvar):
     kl = -0.5 * (torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1))
