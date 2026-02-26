@@ -16,17 +16,15 @@ from .module import IMCModule, SeqModule
 from .utils.dataset import BBNDataset
 from .utils.tools import load_adata, evaluate, visualization_with_leiden
 
-SAVE_ROOT = Path(__file__).parent / 'saved'
-
-
-def train(config: Config, seed: int = 42, run_name: Optional[str] = None, do_eval: bool = True, devices: int = 1):
+def train(config: Config, seed: int = 42, run_name: Optional[str] = None, do_eval: bool = True, devices: int = 1, save_root: Optional[str] = None):
     pl.seed_everything(seed, workers=True)
     config.seed = seed
 
+    save_root = Path(save_root) if save_root else Path.cwd() / 'saved'
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     run_name = f"{timestamp}_{run_name}" if run_name else timestamp
 
-    run_dir = SAVE_ROOT / config.preset / run_name
+    run_dir = save_root / config.preset / run_name
     save_dir = run_dir / f'seed_{seed}'
     run_dir.mkdir(parents=True, exist_ok=True)
     save_dir.mkdir(parents=True, exist_ok=True)
@@ -131,6 +129,7 @@ def main():
     parser.add_argument('--cell_type_key', type=str, default=None, help='Cell type column in obs (default: celltype)')
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--run_name', type=str, default=None)
+    parser.add_argument('--save_root', type=str, default=None, help='Root dir for outputs (default: ./saved)')
     parser.add_argument('--no-eval', action='store_true', help='Skip evaluation')
     parser.add_argument('--devices', type=int, default=1, help='Number of GPUs')
 
@@ -160,7 +159,7 @@ def main():
         if value is not None:
             _set_nested_attr(config, key, value)
 
-    train(config, args.seed, run_name=args.run_name, do_eval=not args.no_eval, devices=args.devices)
+    train(config, args.seed, run_name=args.run_name, do_eval=not args.no_eval, devices=args.devices, save_root=args.save_root)
 
 
 if __name__ == '__main__':

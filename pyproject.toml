@@ -42,6 +42,9 @@ dependencies = [
     "scib>=1.1.0",
 ]
 
+[project.optional-dependencies]
+tutorial = ["gdown>=4.6.0"]
+
 [project.urls]
 Homepage = "https://github.com/UoM-HealthAI/BioBatchNet"
 Repository = "https://github.com/UoM-HealthAI/BioBatchNet"
